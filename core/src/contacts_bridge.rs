@@ -309,8 +309,8 @@ impl ContactManager {
     }
 
     /// Mark a contact as verified (out-of-band verification completed).
-    pub fn mark_verified(&self, peer_id: &str) -> Result<(), crate::IronCoreError> {
-        if let Some(mut contact) = self.get(peer_id.to_string())? {
+    pub fn mark_verified(&self, peer_id: String) -> Result<(), crate::IronCoreError> {
+        if let Some(mut contact) = self.get(peer_id)? {
             contact.verified_at = Some(current_timestamp());
             self.add(contact)?;
         }
@@ -318,8 +318,8 @@ impl ContactManager {
     }
 
     /// Clear verification status (e.g., when key changes).
-    pub fn unverify(&self, peer_id: &str) -> Result<(), crate::IronCoreError> {
-        if let Some(mut contact) = self.get(peer_id.to_string())? {
+    pub fn unverify(&self, peer_id: String) -> Result<(), crate::IronCoreError> {
+        if let Some(mut contact) = self.get(peer_id)? {
             contact.verified_at = None;
             self.add(contact)?;
         }

@@ -194,11 +194,6 @@ callback interface PlatformBridge {
     void wifi_direct_remove_group();
 };
 
-callback interface WifiAwareCallback {
-    void on_service_discovered(string peer_id, bytes service_info, i32 rssi);
-    void on_data_path_confirmed(string peer_id, string ip_address, u16 port);
-};
-
 // ============================================================================
 // AUTO-ADJUST ENGINE
 // ============================================================================
@@ -400,6 +395,4 @@ namespace api {
     BlockedIdentity blocked_identity_with_device_id(BlockedIdentity blocked, string device_id);
     BlockedIdentity blocked_identity_with_reason(BlockedIdentity blocked, string reason);
     BlockedIdentity blocked_identity_with_notes(BlockedIdentity blocked, string notes);
-    ProximityTransport recommended_transport(string peer_id);
-    string safety_number(string our_pubkey_hex, string their_pubkey_hex);
 };
