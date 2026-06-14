@@ -25,6 +25,8 @@ pub struct Contact {
     pub last_known_device_id: Option<String>,
     #[serde(default)]
     pub verified_at: Option<u64>,
+    #[serde(default)]
+    pub is_tombstone: bool,
 }
 
 impl Contact {
@@ -39,6 +41,22 @@ impl Contact {
             notes: None,
             last_known_device_id: None,
             verified_at: None,
+            is_tombstone: false,
+        }
+    }
+
+    pub fn tombstone(peer_id: String) -> Self {
+        Self {
+            peer_id,
+            nickname: None,
+            local_nickname: None,
+            public_key: String::new(),
+            added_at: current_timestamp(),
+            last_seen: None,
+            notes: None,
+            last_known_device_id: None,
+            verified_at: None,
+            is_tombstone: true,
         }
     }
 
@@ -280,6 +298,24 @@ impl ContactManager {
             }
         }
         Ok(updated)
+    }
+
+    /// Mark a contact as verified (out-of-band verification completed).
+    pub fn mark_verified(&self, peer_id: &str) -> Result<(), crate::IronCoreError> {
+        if let Some(mut contact) = self.get(peer_id.to_string())? {
+            contact.verified_at = Some(current_timestamp());
+            self.add(contact)?;
+        }
+        Ok(())
+    }
+
+    /// Clear verification status (e.g., when key changes).
+    pub fn unverify(&self, peer_id: &str) -> Result<(), crate::IronCoreError> {
+        if let Some(mut contact) = self.get(peer_id.to_string())? {
+            contact.verified_at = None;
+            self.add(contact)?;
+        }
+        Ok(())
     }
 
     /// Count total contacts

@@ -62,6 +62,8 @@ pub struct GatewayInfo {
     pub last_updated: u64,
     pub transport: TransportType,
     /// Energy class of the gateway peer (for hardware-aware routing)
+    /// Defaults to High for backward-compat with old peers that don't send energy class.
+    #[serde(default)]
     pub energy_class: EnergyClass,
 }
 
@@ -87,6 +89,8 @@ pub struct NeighborhoodGossip {
     pub neighborhood_summaries: Vec<NeighborhoodSummary>,
     pub timestamp: u64,
     /// Energy class of the gossiping peer
+    /// Defaults to High for backward-compat with old peers.
+    #[serde(default)]
     pub energy_class: EnergyClass,
 }
 

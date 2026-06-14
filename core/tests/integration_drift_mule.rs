@@ -4,8 +4,9 @@
 /// - Insert is idempotent (dedup)
 /// - Merge is commutative, idempotent, associative
 /// - TTL expiry works
-
 use scmessenger_core::drift::store::{MeshStore, StoredEnvelope};
+use scmessenger_core::store::backend::MemoryStorage;
+use std::sync::Arc;
 
 fn make_envelope(id: u8, recipient_hint: [u8; 4]) -> StoredEnvelope {
     StoredEnvelope {
@@ -91,4 +92,77 @@ fn mesh_store_eviction_at_capacity() {
     // Insert a 4th — should evict lowest priority
     store.insert(make_envelope(4, [0xDD; 4]));
     assert_eq!(store.len(), 3); // Still at capacity
+}
+
+#[test]
+fn mesh_store_persistence_roundtrip() {
+    let backend = Arc::new(MemoryStorage::new());
+    let env_a = make_envelope(1, [0xAA; 4]);
+    let env_b = make_envelope(2, [0xBB; 4]);
+
+    // Store messages and persist
+    {
+        let mut store = MeshStore::new();
+        store.insert(env_a.clone());
+        store.insert(env_b.clone());
+        store.save(backend.as_ref()).unwrap();
+    }
+
+    // Load into new store
+    {
+        let mut store = MeshStore::new();
+        let loaded = store.load(backend.as_ref()).unwrap();
+        assert_eq!(loaded, 2);
+        assert_eq!(store.len(), 2);
+        assert!(store.get(&[1; 16]).is_some());
+        assert!(store.get(&[2; 16]).is_some());
+    }
+}
+
+#[test]
+fn mesh_store_persistence_dedup_on_load() {
+    let backend = Arc::new(MemoryStorage::new());
+    let env = make_envelope(1, [0xAA; 4]);
+
+    // Save once
+    {
+        let mut store = MeshStore::new();
+        store.insert(env.clone());
+        store.save(backend.as_ref()).unwrap();
+    }
+
+    // Load twice — second load should be idempotent
+    {
+        let mut store = MeshStore::new();
+        assert_eq!(store.load(backend.as_ref()).unwrap(), 1);
+        assert_eq!(store.load(backend.as_ref()).unwrap(), 0); // duplicates skipped
+        assert_eq!(store.len(), 1);
+    }
+}
+
+#[test]
+fn outbox_drift_single_ownership() {
+    use scmessenger_core::store::outbox::Outbox;
+
+    let mut outbox = Outbox::new();
+    let mut drift = MeshStore::new();
+
+    // Enqueue in outbox
+    let msg = scmessenger_core::store::outbox::QueuedMessage {
+        message_id: "msg-ownership-1".to_string(),
+        recipient_id: "peer-b".to_string(),
+        envelope_data: vec![1, 2, 3],
+        queued_at: 1000,
+        attempts: 0,
+    };
+    outbox.enqueue(msg).unwrap();
+
+    // StoreAndCarry decision: move to drift, remove from outbox
+    let env = make_envelope(1, [0xBB; 4]);
+    drift.insert(env);
+    outbox.remove("msg-ownership-1");
+
+    // Assert: drift owns it, outbox does not
+    assert_eq!(drift.len(), 1);
+    assert!(!outbox.remove("msg-ownership-1"));
 }

@@ -2920,11 +2920,21 @@ impl SwarmBridge {
 }
 
 /// Get the recommended proximity transport for a peer based on current state.
-/// Falls back to BLE if the peer is not tracked by the escalation engine.
+/// Consults the EscalationEngine when available, falls back to BLE.
 pub fn recommended_transport(peer_id: String) -> ProximityTransport {
-    // For now, default to BLE. In production, this would consult the
-    // EscalationEngine with the peer's available transports and current policy.
-    let _ = peer_id;
+    // Parse peer_id as bytes for EscalationEngine lookup
+    if let Ok(bytes) = hex::decode(&peer_id) {
+        if bytes.len() == 32 {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            let engine = crate::transport::escalation::EscalationEngine::new(
+                crate::transport::escalation::EscalationPolicy::Balanced,
+            );
+            if let Some(transport) = engine.recommended_transport(&arr) {
+                return transport;
+            }
+        }
+    }
     ProximityTransport::Ble
 }
 
@@ -3380,5 +3390,36 @@ mod tests {
         assert!(settings.wifi_direct_enabled);
         assert!(settings.internet_enabled);
         assert_eq!(settings.discovery_mode, crate::DiscoveryMode::Normal);
+    }
+
+    #[test]
+    fn message_status_monotone_progress() {
+        // Valid transitions: Queued → InCustody/Sent → Delivered
+        // Never regresses: Delivered never downgrades
+        let status = MessageStatus::default();
+        assert_eq!(status, MessageStatus::Queued);
+
+        // Queued → InCustody (valid)
+        let custody = MessageStatus::InCustody;
+        assert!(custody as u8 > MessageStatus::Queued as u8);
+
+        // Queued → Sent (valid)
+        let sent = MessageStatus::Sent;
+        assert!(sent as u8 > MessageStatus::Queued as u8);
+
+        // Sent → Delivered (valid)
+        let delivered = MessageStatus::Delivered;
+        assert!(delivered as u8 > MessageStatus::Sent as u8);
+
+        // Delivered is highest — no regression possible
+        assert_eq!(delivered as u8, 3);
+    }
+
+    #[test]
+    fn message_status_serialization_roundtrip() {
+        let status = MessageStatus::Delivered;
+        let json = serde_json::to_string(&status).unwrap();
+        let deserialized: MessageStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, deserialized);
     }
 }

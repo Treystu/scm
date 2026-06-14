@@ -280,6 +280,7 @@ dictionary Contact {
     string? notes;
     string? last_known_device_id;
     u64? verified_at;
+    boolean is_tombstone;
 };
 
 

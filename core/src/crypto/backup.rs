@@ -101,6 +101,7 @@ pub fn encrypt_backup(
 ///
 /// # Errors
 /// Returns `IronCoreError::CryptoError` if decryption fails.
+/// Returns `IronCoreError::CorruptionDetected` if the data is tampered (auth tag mismatch).
 /// Returns `IronCoreError::InvalidInput` if the hex string or data length is invalid.
 pub fn decrypt_backup(encrypted_hex: &str, passphrase: &str) -> Result<String, IronCoreError> {
     // Decode the hex string
@@ -115,10 +116,12 @@ pub fn decrypt_backup(encrypted_hex: &str, passphrase: &str) -> Result<String, I
         if let Ok(key) = derive_key(passphrase, salt_bytes) {
             if let Ok(cipher) = XChaCha20Poly1305::new_from_slice(&key) {
                 let nonce = XNonce::from_slice(nonce_bytes);
-                if let Ok(plaintext) = cipher.decrypt(nonce, ciphertext) {
-                    if let Ok(plaintext_str) = String::from_utf8(plaintext) {
-                        return Ok(plaintext_str);
+                match cipher.decrypt(nonce, ciphertext) {
+                    Ok(plaintext) => {
+                        return String::from_utf8(plaintext)
+                            .map_err(|_| IronCoreError::CorruptionDetected);
                     }
+                    Err(_) => return Err(IronCoreError::CorruptionDetected),
                 }
             }
         }
@@ -138,9 +141,9 @@ pub fn decrypt_backup(encrypted_hex: &str, passphrase: &str) -> Result<String, I
 
         let plaintext = cipher
             .decrypt(nonce, ciphertext)
-            .map_err(|_| IronCoreError::CryptoError)?;
+            .map_err(|_| IronCoreError::CorruptionDetected)?;
 
-        return String::from_utf8(plaintext).map_err(|_| IronCoreError::CryptoError);
+        return String::from_utf8(plaintext).map_err(|_| IronCoreError::CorruptionDetected);
     }
 
     Err(IronCoreError::InvalidInput)
