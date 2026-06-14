@@ -2044,26 +2044,18 @@ impl IronCore {
     pub fn routing_register_path(&self, peer_id_hex: String, path_id: u64, latency_ms: u64) {
         if let Some(engine) = self.routing_engine.write().as_mut() {
             engine.record_message_activity(&peer_id_hex);
-            #[cfg(feature = "phase2_apis")]
             engine.multipath_register_path(peer_id_hex.clone(), path_id, latency_ms);
-        }
-        #[cfg(not(feature = "phase2_apis"))]
-        {
-            let _ = (path_id, latency_ms);
         }
     }
 
     /// Mark a routing path as failed.
-    /// Records the path failure in the multipath delivery manager (Phase 2)
+    /// Records the path failure in the multipath delivery manager
     /// and marks the peer as unreachable in the negative cache.
     pub fn routing_mark_path_failed(&self, path_id: u64) {
         tracing::debug!("Path {} marked as failed", path_id);
-        #[cfg(feature = "phase2_apis")]
-        {
-            let mut guard = self.routing_engine.write();
-            if let Some(ref mut engine) = guard.as_mut() {
-                engine.multipath_mark_path_failed(path_id);
-            }
+        let mut guard = self.routing_engine.write();
+        if let Some(ref mut engine) = guard.as_mut() {
+            engine.multipath_mark_path_failed(path_id);
         }
     }
 
@@ -2617,9 +2609,6 @@ impl IronCore {
     /// Get active multipath delivery paths for a peer from the routing engine.
     /// Returns an empty list if the routing engine is not initialized or
     /// no paths are registered for the peer.
-    /// Note: The multipath module is behind the "phase2_apis" feature flag.
-    /// This function returns empty paths by default when the feature is not enabled.
-    #[cfg(feature = "phase2_apis")]
     pub fn get_active_paths(&self, _peer_id: u64) -> Vec<crate::routing::multipath::DeliveryPath> {
         // MultiPathDelivery tracking is handled by the routing engine.
         // For now, return empty list to surface the API without breaking.
