@@ -3875,8 +3875,19 @@ open class MeshRepository(private val context: Context) {
             val info = core.getIdentityInfo()
             if (info != null && info.initialized) {
                 cacheIdentityFields(info)
+                publishIdentityInfo(info)
+                return info
             }
-            // P0_SHARED_IDENTITY: publish to all subscribers (Main/Identity/Settings VMs)
+            // Core exists but reports uninitialized (sled lost/corrupt).
+            // Fall back to SharedPreferences cache — the identity was created
+            // in a previous session and the backup is still valid.
+            val cached = readCachedIdentityFields()
+            if (cached != null && cached.initialized) {
+                Timber.w("getIdentityInfoNonBlocking: core uninitialized but cache has identity; using cached")
+                publishIdentityInfo(cached)
+                return cached
+            }
+            // Neither core nor cache has identity
             publishIdentityInfo(info)
             return info
         }
@@ -3912,6 +3923,15 @@ open class MeshRepository(private val context: Context) {
         // P0: Cache identity fields for instant UI load on next startup
         if (result != null && result.initialized) {
             cacheIdentityFields(result)
+            publishIdentityInfo(result)
+            return result
+        }
+        // Core returned uninitialized — fall back to SharedPreferences cache
+        val cached = readCachedIdentityFields()
+        if (cached != null && cached.initialized) {
+            Timber.w("getIdentityInfo: core uninitialized but cache has identity; using cached")
+            publishIdentityInfo(cached)
+            return cached
         }
         // P0_SHARED_IDENTITY: publish to all subscribers
         publishIdentityInfo(result)
