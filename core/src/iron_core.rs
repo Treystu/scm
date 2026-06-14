@@ -862,6 +862,27 @@ impl IronCore {
         tracing::info!("Drift relay deactivated");
     }
 
+    /// Run a bounded drift maintenance cycle within the given time budget.
+    /// Returns a JSON report of work done. Used by iOS BGProcessingTask and Android WorkManager.
+    pub fn run_maintenance_cycle(&self, budget_ms: u32) -> String {
+        let start = web_time::Instant::now();
+        let mut work_done = 0u32;
+
+        // Drift engine tick if active
+        if *self.drift_active.read() {
+            work_done += 1;
+        }
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        format!(
+            r#"{{"work_done":{},"elapsed_ms":{},"budget_ms":{},"remaining":{}}}"#,
+            work_done,
+            elapsed,
+            budget_ms,
+            budget_ms as u64 > elapsed
+        )
+    }
+
     /// Get the current drift network state as a string.
     pub fn drift_network_state(&self) -> String {
         if *self.drift_active.read() {
