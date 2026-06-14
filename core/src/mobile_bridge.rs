@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -43,6 +44,36 @@ pub enum MotionState {
     Running,
     Automotive,
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProximityTransport {
+    Ble,
+    WifiAware,
+    WifiDirect,
+    Multipeer,
+}
+
+impl ProximityTransport {
+    pub fn max_payload_size(&self) -> usize {
+        match self {
+            ProximityTransport::Ble => 512,
+            ProximityTransport::WifiAware => 2048,
+            ProximityTransport::WifiDirect => 4096,
+            ProximityTransport::Multipeer => 4096,
+        }
+    }
+}
+
+impl fmt::Display for ProximityTransport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProximityTransport::Ble => write!(f, "BLE"),
+            ProximityTransport::WifiAware => write!(f, "WiFiAware"),
+            ProximityTransport::WifiDirect => write!(f, "WiFiDirect"),
+            ProximityTransport::Multipeer => write!(f, "Multipeer"),
+        }
+    }
 }
 
 /// Network connectivity type reported by the platform.
@@ -1131,8 +1162,29 @@ impl MeshService {
     }
 
     pub fn on_ble_data_received(&self, peer_id: String, data: Vec<u8>) {
-        tracing::info!("BLE data received from {}", peer_id);
-        self.nearby_ble_peers.lock().insert(peer_id.clone());
+        self.on_proximity_data_received(peer_id, ProximityTransport::Ble, data);
+    }
+
+    pub fn on_proximity_data_received(
+        &self,
+        peer_id: String,
+        transport: ProximityTransport,
+        data: Vec<u8>,
+    ) {
+        tracing::info!("{} data received from {}", transport, peer_id);
+        if data.len() > transport.max_payload_size() {
+            tracing::warn!(
+                "{} payload from {} exceeds max ({} > {}), dropping",
+                transport,
+                peer_id,
+                data.len(),
+                transport.max_payload_size()
+            );
+            return;
+        }
+        if transport == ProximityTransport::Ble {
+            self.nearby_ble_peers.lock().insert(peer_id.clone());
+        }
         self.on_data_received(peer_id, data);
     }
 
@@ -1252,8 +1304,28 @@ impl MeshService {
 
     /// Helper to dispatch a packet via BLE bridge
     pub fn dispatch_ble_packet(&self, peer_id: String, data: Vec<u8>) {
+        self.dispatch_proximity_packet(peer_id, ProximityTransport::Ble, data);
+    }
+
+    /// Helper to dispatch a packet via any proximity transport
+    pub fn dispatch_proximity_packet(
+        &self,
+        peer_id: String,
+        transport: ProximityTransport,
+        data: Vec<u8>,
+    ) {
+        if data.len() > transport.max_payload_size() {
+            tracing::warn!(
+                "{} payload to {} exceeds max ({} > {}), dropping",
+                transport,
+                peer_id,
+                data.len(),
+                transport.max_payload_size()
+            );
+            return;
+        }
         if let Some(bridge) = self.platform_bridge.lock().as_ref() {
-            bridge.send_ble_packet(peer_id, data);
+            bridge.send_proximity_packet(peer_id, transport, data);
         }
     }
 }
@@ -1448,6 +1520,13 @@ pub trait PlatformBridge: Send + Sync {
     fn on_entering_background(&self);
     fn on_entering_foreground(&self);
     fn send_ble_packet(&self, peer_id: String, data: Vec<u8>);
+    fn on_proximity_data_received(
+        &self,
+        peer_id: String,
+        transport: ProximityTransport,
+        data: Vec<u8>,
+    );
+    fn send_proximity_packet(&self, peer_id: String, transport: ProximityTransport, data: Vec<u8>);
 }
 
 // ============================================================================
@@ -2262,6 +2341,10 @@ pub struct SwarmBridge {
     /// Callback for dispatching BLE packets to the platform layer.
     #[allow(clippy::type_complexity)]
     dispatch_ble_fn: Arc<Mutex<Option<Arc<dyn Fn(String, Vec<u8>) + Send + Sync>>>>,
+    /// Callback for dispatching proximity packets (any transport) to the platform layer.
+    #[allow(clippy::type_complexity)]
+    dispatch_proximity_fn:
+        Arc<Mutex<Option<Arc<dyn Fn(String, ProximityTransport, Vec<u8>) + Send + Sync>>>>,
 }
 
 impl Default for SwarmBridge {
@@ -2312,6 +2395,7 @@ impl SwarmBridge {
             captured_handle: Some(get_global_runtime()),
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             dispatch_ble_fn: Arc::new(Mutex::new(None)),
+            dispatch_proximity_fn: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -2583,8 +2667,23 @@ impl SwarmBridge {
 
     /// Dispatch a BLE packet to the platform layer.
     pub fn dispatch_ble_packet(&self, peer_id: String, data: Vec<u8>) {
-        if let Some(ref f) = *self.dispatch_ble_fn.lock() {
-            f(peer_id, data);
+        self.dispatch_proximity_packet(peer_id, ProximityTransport::Ble, data);
+    }
+
+    /// Dispatch a proximity packet via any transport to the platform layer.
+    pub fn dispatch_proximity_packet(
+        &self,
+        peer_id: String,
+        transport: ProximityTransport,
+        data: Vec<u8>,
+    ) {
+        if let Some(ref f) = *self.dispatch_proximity_fn.lock() {
+            f(peer_id, transport, data);
+        } else if let Some(ref f) = *self.dispatch_ble_fn.lock() {
+            // Fallback: if only BLE callback is set, use it for BLE transport
+            if transport == ProximityTransport::Ble {
+                f(peer_id, data);
+            }
         }
     }
 
@@ -2592,6 +2691,15 @@ impl SwarmBridge {
     #[allow(clippy::type_complexity)]
     pub fn set_dispatch_ble_fn(&self, f: Option<Arc<dyn Fn(String, Vec<u8>) + Send + Sync>>) {
         *self.dispatch_ble_fn.lock() = f;
+    }
+
+    /// Set the proximity dispatch callback (supports all transports).
+    #[allow(clippy::type_complexity)]
+    pub fn set_dispatch_proximity_fn(
+        &self,
+        f: Option<Arc<dyn Fn(String, ProximityTransport, Vec<u8>) + Send + Sync>>,
+    ) {
+        *self.dispatch_proximity_fn.lock() = f;
     }
 }
 

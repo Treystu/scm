@@ -157,6 +157,14 @@ enum MotionState {
     "Unknown",
 };
 
+/// Proximity transport types for the unified data plane
+enum ProximityTransport {
+    "Ble",
+    "WifiAware",
+    "WifiDirect",
+    "Multipeer",
+};
+
 dictionary ServiceStats {
     u32 peers_discovered;
     u32 messages_relayed;
@@ -173,6 +181,8 @@ callback interface PlatformBridge {
     void on_entering_background();
     void on_entering_foreground();
     void send_ble_packet(string peer_id, bytes data);
+    void on_proximity_data_received(string peer_id, ProximityTransport transport, bytes data);
+    void send_proximity_packet(string peer_id, ProximityTransport transport, bytes data);
 };
 
 // ============================================================================
