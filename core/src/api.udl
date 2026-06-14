@@ -187,6 +187,11 @@ callback interface PlatformBridge {
     boolean wifi_aware_subscribe(string service_name);
     boolean wifi_aware_create_data_path(string peer_id, bytes pmk);
     void wifi_aware_stop();
+    boolean wifi_direct_discover_peers();
+    void wifi_direct_stop_discovery();
+    boolean wifi_direct_connect(string device_address);
+    boolean wifi_direct_create_group(string group_name);
+    void wifi_direct_remove_group();
 };
 
 callback interface WifiAwareCallback {

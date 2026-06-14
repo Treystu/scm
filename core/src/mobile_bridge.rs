@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::settings::MeshSettings;
 use crate::transport::wifi_aware::{WifiAwareError, WifiAwarePlatformBridge};
+use crate::transport::wifi_direct::PlatformWifiDirectBridge;
 use crate::transport::SwarmHandle;
 
 // MOBILE SERVICE
@@ -176,6 +177,7 @@ pub struct MeshService {
     device_state: RwLock<Option<DeviceState>>,
     auto_adjust: Arc<AutoAdjustEngine>,
     wifi_aware_bridge: Arc<Mutex<Option<Arc<PlatformWifiAwareBridge>>>>,
+    wifi_direct_bridge: Arc<Mutex<Option<Arc<PlatformWifiDirectBridge>>>>,
     /// Platform-provided delegate for decentralized protocol events (Phase 4).
     external_delegate: Arc<Mutex<Option<Box<dyn crate::CoreDelegate>>>>,
 }
@@ -202,6 +204,7 @@ impl MeshService {
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             external_delegate: Arc::new(Mutex::new(None)),
             wifi_aware_bridge: Arc::new(Mutex::new(None)),
+            wifi_direct_bridge: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -226,6 +229,7 @@ impl MeshService {
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             external_delegate: Arc::new(Mutex::new(None)),
             wifi_aware_bridge: Arc::new(Mutex::new(None)),
+            wifi_direct_bridge: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -254,6 +258,7 @@ impl MeshService {
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             external_delegate: Arc::new(Mutex::new(None)),
             wifi_aware_bridge: Arc::new(Mutex::new(None)),
+            wifi_direct_bridge: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -335,6 +340,12 @@ impl MeshService {
             ));
             *self.wifi_aware_bridge.lock() = Some(aware_bridge);
             tracing::info!("WiFi Aware bridge adapter initialized");
+
+            let direct_bridge = Arc::new(PlatformWifiDirectBridge::new_platform_ref(
+                self.platform_bridge.clone(),
+            ));
+            *self.wifi_direct_bridge.lock() = Some(direct_bridge);
+            tracing::info!("WiFi Direct bridge adapter initialized");
         }
 
         // Update state
@@ -1542,6 +1553,11 @@ pub trait PlatformBridge: Send + Sync {
     fn wifi_aware_subscribe(&self, service_name: String) -> bool;
     fn wifi_aware_create_data_path(&self, peer_id: String, pmk: Vec<u8>) -> bool;
     fn wifi_aware_stop(&self);
+    fn wifi_direct_discover_peers(&self) -> bool;
+    fn wifi_direct_stop_discovery(&self);
+    fn wifi_direct_connect(&self, device_address: String) -> bool;
+    fn wifi_direct_create_group(&self, group_name: String) -> bool;
+    fn wifi_direct_remove_group(&self);
 }
 
 pub trait WifiAwareCallback: Send + Sync {
