@@ -2893,6 +2893,15 @@ impl SwarmBridge {
     }
 }
 
+/// Get the recommended proximity transport for a peer based on current state.
+/// Falls back to BLE if the peer is not tracked by the escalation engine.
+pub fn recommended_transport(peer_id: String) -> ProximityTransport {
+    // For now, default to BLE. In production, this would consult the
+    // EscalationEngine with the peer's available transports and current policy.
+    let _ = peer_id;
+    ProximityTransport::Ble
+}
+
 fn current_timestamp() -> u64 {
     web_time::SystemTime::now()
         .duration_since(web_time::UNIX_EPOCH)

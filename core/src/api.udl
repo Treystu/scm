@@ -390,4 +390,5 @@ namespace api {
     BlockedIdentity blocked_identity_with_device_id(BlockedIdentity blocked, string device_id);
     BlockedIdentity blocked_identity_with_reason(BlockedIdentity blocked, string reason);
     BlockedIdentity blocked_identity_with_notes(BlockedIdentity blocked, string notes);
+    ProximityTransport recommended_transport(string peer_id);
 };

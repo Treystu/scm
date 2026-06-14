@@ -8,6 +8,7 @@ pub mod capability;
 pub mod circuit_breaker;
 pub mod diagnostics;
 pub mod discovery;
+pub mod escalation;
 pub mod health;
 pub mod internet;
 pub mod manager;
