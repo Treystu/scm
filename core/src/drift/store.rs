@@ -120,6 +120,11 @@ impl MeshStore {
     /// - Commutative: merge(A, B) == merge(B, A)
     /// - Idempotent: merge(A, A) == A
     /// - Associative: merge(merge(A, B), C) == merge(A, merge(B, C))
+    ///
+    /// NOTE: When the merged store exceeds `max_messages`, eviction occurs based
+    /// on priority score. This violates strict CRDT monotonic-growth — evicted
+    /// messages may be re-added by a subsequent merge. Use matching capacities
+    /// across peers for predictable behavior.
     pub fn merge(&mut self, other: &MeshStore) {
         for (id, envelope) in &other.messages {
             if !self.messages.contains_key(id) {

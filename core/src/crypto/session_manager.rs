@@ -222,13 +222,14 @@ impl SerializableRatchetSession {
 
     /// Reconstruct a live session from a serialized snapshot.
     pub fn into_session(self) -> Result<RatchetSession> {
-        let our_dh_secret_bytes = hex::decode(&self.our_dh_secret_hex)
+        let mut our_dh_secret_bytes = hex::decode(&self.our_dh_secret_hex)
             .map_err(|e| anyhow::anyhow!("Invalid our_dh_secret_hex: {}", e))?;
         if our_dh_secret_bytes.len() != 32 {
             bail!("our_dh_secret must be 32 bytes");
         }
         let mut secret_arr = [0u8; 32];
         secret_arr.copy_from_slice(&our_dh_secret_bytes);
+        our_dh_secret_bytes.zeroize();
         let our_dh_secret = X25519StaticSecret::from(secret_arr);
         secret_arr.zeroize();
 
@@ -255,13 +256,14 @@ impl SerializableRatchetSession {
             None => None,
         };
 
-        let root_key_bytes = hex::decode(&self.root_key_hex)
+        let mut root_key_bytes = hex::decode(&self.root_key_hex)
             .map_err(|e| anyhow::anyhow!("Invalid root_key_hex: {}", e))?;
         if root_key_bytes.len() != 32 {
             bail!("root_key must be 32 bytes");
         }
         let mut rk_arr = [0u8; 32];
         rk_arr.copy_from_slice(&root_key_bytes);
+        root_key_bytes.zeroize();
         let root_key = RatchetKey::from_bytes(rk_arr);
 
         let sending_chain = self.sending_chain.map(|cs| {
@@ -277,13 +279,14 @@ impl SerializableRatchetSession {
         });
 
         let our_identity_secret = if let Some(ref hex_str) = self.identity_secret_hex {
-            let bytes = hex::decode(hex_str)
+            let mut bytes = hex::decode(hex_str)
                 .map_err(|e| anyhow::anyhow!("Invalid identity_secret_hex: {}", e))?;
             if bytes.len() != 32 {
                 bail!("identity_secret must be 32 bytes");
             }
             let mut arr = [0u8; 32];
             arr.copy_from_slice(&bytes);
+            bytes.zeroize();
             let secret = X25519StaticSecret::from(arr);
             arr.zeroize();
             Some(secret)
