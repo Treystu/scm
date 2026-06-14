@@ -132,6 +132,66 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
+/// Routing telemetry ring buffer for field debugging.
+/// Stores the last 256 routing decisions in memory (cleared on app kill).
+pub struct RoutingTelemetry {
+    ring: Vec<RoutingDecisionSnapshot>,
+    capacity: usize,
+}
+
+/// Snapshot of a single routing decision for telemetry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingDecisionSnapshot {
+    pub message_id_hex: String,
+    pub recipient_hint_hex: String,
+    pub decided_by: String,
+    pub confidence: f64,
+    pub primary_hop: String,
+    pub alternative_count: usize,
+    pub timestamp_ms: u64,
+}
+
+impl RoutingTelemetry {
+    pub fn new() -> Self {
+        Self {
+            ring: Vec::with_capacity(256),
+            capacity: 256,
+        }
+    }
+
+    /// Record a routing decision.
+    pub fn record(&mut self, decision: &crate::routing::RoutingDecision) {
+        let snapshot = RoutingDecisionSnapshot {
+            message_id_hex: hex::encode(decision.message_id),
+            recipient_hint_hex: hex::encode(decision.recipient_hint),
+            decided_by: format!("{:?}", decision.decided_by),
+            confidence: decision.confidence,
+            primary_hop: format!("{:?}", decision.primary),
+            alternative_count: decision.alternatives.len(),
+            timestamp_ms: now_ms(),
+        };
+
+        if self.ring.len() >= self.capacity {
+            self.ring.remove(0);
+        }
+        self.ring.push(snapshot);
+    }
+
+    /// Get all recorded decisions (newest last).
+    pub fn entries(&self) -> &[RoutingDecisionSnapshot] {
+        &self.ring
+    }
+
+    /// Get the number of recorded decisions.
+    pub fn len(&self) -> usize {
+        self.ring.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ring.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
