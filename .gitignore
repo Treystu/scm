@@ -112,6 +112,9 @@ AgentSwarmCline/scmessenger_swarm/swarm_logs/
 AgentSwarmCline/scmessenger_swarm/__pycache__/
 AgentSwarmCline/scmessenger_swarm/task_*.json
 
+# Repomix output (AI context dump, regeneratable)
+repomix-output.xml
+
 # Build outputs and artifacts (auto-generated, regeneratable)
 dist/wasm/*.wasm
 wasm/pkg/*.wasm

@@ -654,7 +654,10 @@ mod tests {
     #[test]
     fn test_dns_discovery() {
         let addrs = discover_dns_bootstrap().unwrap();
-        assert!(addrs.is_empty(), "DNS bootstrap discovery should be empty in sovereign mode");
+        assert!(
+            addrs.is_empty(),
+            "DNS bootstrap discovery should be empty in sovereign mode"
+        );
     }
 
     #[test]

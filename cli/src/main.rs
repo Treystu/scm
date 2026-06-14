@@ -2389,9 +2389,8 @@ async fn cmd_relay(listen_addr: String, http_port: u16, node_name: Option<String
         .collect();
     if !bootstrap_multiaddrs.is_empty() {
         println!(
-            "{} Auto-dialing {} bootstrap node(s)",
-            "📡".to_string(),
-            bootstrap_multiaddrs.len().to_string().bright_cyan()
+            "📡 Auto-dialing {} bootstrap node(s)",
+            bootstrap_multiaddrs.len()
         );
     }
 

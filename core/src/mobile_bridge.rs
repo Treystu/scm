@@ -466,7 +466,11 @@ impl MeshService {
         payload.to_string()
     }
 
-    pub fn start_swarm(&self, listen_addr: String, bootstrap_addrs: Vec<String>) -> Result<(), crate::IronCoreError> {
+    pub fn start_swarm(
+        &self,
+        listen_addr: String,
+        bootstrap_addrs: Vec<String>,
+    ) -> Result<(), crate::IronCoreError> {
         // Extract keys while holding the lock, then DROP the lock before any
         // runtime/thread work.  This is critical: if anything below panics
         // while the lock is held, parking_lot will NOT poison it (unlike
@@ -523,7 +527,10 @@ impl MeshService {
             .filter_map(|s| s.parse().ok())
             .collect();
         if !parsed_bootstrap.is_empty() {
-            tracing::info!("📱 Mobile bridge: {} bootstrap addrs configured", parsed_bootstrap.len());
+            tracing::info!(
+                "📱 Mobile bridge: {} bootstrap addrs configured",
+                parsed_bootstrap.len()
+            );
         }
 
         let swarm_bridge = self.swarm_bridge.clone();
