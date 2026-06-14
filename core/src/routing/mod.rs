@@ -32,7 +32,9 @@ pub use global::{GlobalRoutes, RouteAdvertisement, RouteRequest};
 pub use local::{CellSummary, LocalCell, PeerEvent, PeerId, PeerInfo, PeerStatus, TransportType};
 pub use multipath::DeliveryPath;
 pub use negative_cache::{NegativeCache, NegativeCacheStats};
-pub use neighborhood::{GatewayInfo, NeighborhoodGossip, NeighborhoodSummary, NeighborhoodTable};
+pub use neighborhood::{
+    EnergyClass, GatewayInfo, NeighborhoodGossip, NeighborhoodSummary, NeighborhoodTable,
+};
 pub use optimized_engine::{OptimizedRoutingEngine, OptimizedRoutingMaintenance};
 pub use resume_prefetch::{
     FrequentPeer, PrefetchConfig, PrefetchStats, PrefetchStatus, PrefetchedRoute,
