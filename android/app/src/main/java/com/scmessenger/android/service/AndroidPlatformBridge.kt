@@ -392,6 +392,84 @@ class AndroidPlatformBridge @Inject constructor(
     }
 
     // ========================================================================
+    // PROXIMITY TRANSPORT BRIDGE
+    // ========================================================================
+
+    override fun onProximityDataReceived(peerId: String, transport: uniffi.api.ProximityTransport, data: ByteArray) {
+        Timber.d("Proximity data received from $peerId via $transport: ${data.size} bytes")
+        when (transport) {
+            uniffi.api.ProximityTransport.BLE -> {
+                scope.launch { onBleDataReceived(peerId, data) }
+            }
+            else -> {
+                Timber.d("Non-BLE proximity data ($transport) not yet wired to transport manager")
+            }
+        }
+    }
+
+    override fun sendProximityPacket(peerId: String, transport: uniffi.api.ProximityTransport, data: ByteArray) {
+        Timber.d("Sending proximity packet to $peerId via $transport: ${data.size} bytes")
+        when (transport) {
+            uniffi.api.ProximityTransport.BLE -> {
+                scope.launch { sendBlePacket(peerId, data) }
+            }
+            else -> {
+                Timber.d("Non-BLE proximity send ($transport) not yet wired to transport manager")
+            }
+        }
+    }
+
+    // ========================================================================
+    // WIFI AWARE BRIDGE (stubs — pending WifiAwareTransport integration)
+    // ========================================================================
+
+    override fun wifiAwarePublish(serviceName: String, serviceInfo: ByteArray): Boolean {
+        Timber.d("wifiAwarePublish: $serviceName (${serviceInfo.size} bytes)")
+        return false
+    }
+
+    override fun wifiAwareSubscribe(serviceName: String): Boolean {
+        Timber.d("wifiAwareSubscribe: $serviceName")
+        return false
+    }
+
+    override fun wifiAwareCreateDataPath(peerId: String, pmk: ByteArray): Boolean {
+        Timber.d("wifiAwareCreateDataPath: $peerId (${pmk.size} bytes)")
+        return false
+    }
+
+    override fun wifiAwareStop() {
+        Timber.d("wifiAwareStop")
+    }
+
+    // ========================================================================
+    // WIFI DIRECT BRIDGE (stubs — pending WifiDirectTransport integration)
+    // ========================================================================
+
+    override fun wifiDirectDiscoverPeers(): Boolean {
+        Timber.d("wifiDirectDiscoverPeers")
+        return false
+    }
+
+    override fun wifiDirectStopDiscovery() {
+        Timber.d("wifiDirectStopDiscovery")
+    }
+
+    override fun wifiDirectConnect(deviceAddress: String): Boolean {
+        Timber.d("wifiDirectConnect: $deviceAddress")
+        return false
+    }
+
+    override fun wifiDirectCreateGroup(groupName: String): Boolean {
+        Timber.d("wifiDirectCreateGroup: $groupName")
+        return false
+    }
+
+    override fun wifiDirectRemoveGroup() {
+        Timber.d("wifiDirectRemoveGroup")
+    }
+
+    // ========================================================================
     // PRIVATE HELPERS
     // ========================================================================
 

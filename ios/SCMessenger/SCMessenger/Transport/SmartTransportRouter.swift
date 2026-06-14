@@ -8,6 +8,7 @@
 
 import Foundation
 import os
+import SCMessengerCore
 
 /// Result of a transport delivery attempt
 struct TransportDeliveryResult {
@@ -373,6 +374,13 @@ final class SmartTransportRouter {
         }
     }
     
+    // MARK: - Rust Core Integration
+
+    /// Get the Rust core's recommended transport for a peer
+    func getRecommendedTransport(peerId: String) -> ProximityTransport {
+        return SCMessengerCore.recommendedTransport(peerId: peerId)
+    }
+
     // MARK: - Diagnostics
     
     /// Get transport health summary for diagnostics

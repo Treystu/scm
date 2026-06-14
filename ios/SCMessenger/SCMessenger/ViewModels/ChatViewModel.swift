@@ -101,6 +101,15 @@ final class ChatViewModel {
         }
     }
 
+    func statusGlyph(for status: MessageStatus) -> String {
+        switch status {
+        case .queued: return "clock"
+        case .inCustody: return "arrow.triangle.2.circlepath"
+        case .sent: return "checkmark"
+        case .delivered: return "checkmark.circle"
+        }
+    }
+
     private var reloadDebounceTask: Task<Void, Never>?
 
     private func subscribeToNewMessages() {
