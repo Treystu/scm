@@ -252,12 +252,22 @@ impl MeshStore {
     ) -> Result<usize, String> {
         let entries = backend.scan_prefix(b"drift:")?;
         let mut loaded = 0;
+        let mut failed = 0;
         for (_key, value) in entries {
-            if let Ok(envelope) = bincode::deserialize::<StoredEnvelope>(&value) {
-                if self.insert(envelope) {
-                    loaded += 1;
+            match bincode::deserialize::<StoredEnvelope>(&value) {
+                Ok(envelope) => {
+                    if self.insert(envelope) {
+                        loaded += 1;
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to deserialize drift envelope: {}", e);
+                    failed += 1;
                 }
             }
+        }
+        if failed > 0 {
+            tracing::warn!("MeshStore load: {} entries failed deserialization", failed);
         }
         Ok(loaded)
     }

@@ -288,7 +288,15 @@ impl ContactManager {
             if let Some(local) = self.get(remote.peer_id.clone())? {
                 // LWW: higher timestamp wins
                 if remote.added_at > local.added_at {
-                    self.add(remote)?;
+                    let mut merged = remote;
+                    // Preserve local-only fields that the remote doesn't know about
+                    if merged.local_nickname.is_none() && local.local_nickname.is_some() {
+                        merged.local_nickname = local.local_nickname;
+                    }
+                    if merged.verified_at.is_none() && local.verified_at.is_some() {
+                        merged.verified_at = local.verified_at;
+                    }
+                    self.add(merged)?;
                     updated += 1;
                 }
             } else {
