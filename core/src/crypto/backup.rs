@@ -56,22 +56,24 @@ pub fn encrypt_backup(
     passphrase: &str,
     custom_salt: Option<&[u8; 16]>,
 ) -> Result<String, IronCoreError> {
+    use rand::rngs::OsRng;
     use rand::RngCore;
+    use zeroize::Zeroize;
 
     // Determine or generate the 16-byte salt
     let mut salt_bytes = [0u8; 16];
     if let Some(s) = custom_salt {
         salt_bytes.copy_from_slice(s);
     } else {
-        rand::thread_rng().fill_bytes(&mut salt_bytes);
+        OsRng.fill_bytes(&mut salt_bytes);
     }
 
     // Generate a cryptographically secure random 24-byte nonce
     let mut nonce_bytes = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    OsRng.fill_bytes(&mut nonce_bytes);
 
     // Derive key using the salt
-    let key = derive_key(passphrase, &salt_bytes)?;
+    let mut key = derive_key(passphrase, &salt_bytes)?;
 
     // Initialize cipher and encrypt
     let cipher = XChaCha20Poly1305::new_from_slice(&key).map_err(|_| IronCoreError::CryptoError)?;
@@ -80,6 +82,9 @@ pub fn encrypt_backup(
     let ciphertext = cipher
         .encrypt(nonce, payload.as_bytes())
         .map_err(|_| IronCoreError::CryptoError)?;
+
+    // Zeroize key material from stack
+    key.zeroize();
 
     // Combine salt, nonce, and ciphertext (with tag) into a single buffer, then hex-encode
     let mut combined = Vec::with_capacity(16 + NONCE_LEN + ciphertext.len());
@@ -104,6 +109,8 @@ pub fn encrypt_backup(
 /// Returns `IronCoreError::CorruptionDetected` if the data is tampered (auth tag mismatch).
 /// Returns `IronCoreError::InvalidInput` if the hex string or data length is invalid.
 pub fn decrypt_backup(encrypted_hex: &str, passphrase: &str) -> Result<String, IronCoreError> {
+    use zeroize::Zeroize;
+
     // Decode the hex string
     let data = hex::decode(encrypted_hex).map_err(|_| IronCoreError::InvalidInput)?;
 
@@ -113,17 +120,19 @@ pub fn decrypt_backup(encrypted_hex: &str, passphrase: &str) -> Result<String, I
         let (nonce_bytes, ciphertext) = rest.split_at(NONCE_LEN);
 
         // Derive key from passphrase and extracted salt
-        if let Ok(key) = derive_key(passphrase, salt_bytes) {
+        if let Ok(mut key) = derive_key(passphrase, salt_bytes) {
             if let Ok(cipher) = XChaCha20Poly1305::new_from_slice(&key) {
                 let nonce = XNonce::from_slice(nonce_bytes);
-                match cipher.decrypt(nonce, ciphertext) {
+                let result = match cipher.decrypt(nonce, ciphertext) {
                     Ok(plaintext) => {
-                        return String::from_utf8(plaintext)
-                            .map_err(|_| IronCoreError::CorruptionDetected);
+                        String::from_utf8(plaintext).map_err(|_| IronCoreError::CorruptionDetected)
                     }
-                    Err(_) => return Err(IronCoreError::CorruptionDetected),
-                }
+                    Err(_) => Err(IronCoreError::CorruptionDetected),
+                };
+                key.zeroize();
+                return result;
             }
+            key.zeroize();
         }
     }
 
@@ -133,17 +142,18 @@ pub fn decrypt_backup(encrypted_hex: &str, passphrase: &str) -> Result<String, I
 
         // Derive key from passphrase using legacy deterministic Blake3 hash of the passphrase as salt
         let salt = blake3::hash(passphrase.as_bytes());
-        let key = derive_key(passphrase, salt.as_bytes())?;
+        let mut key = derive_key(passphrase, salt.as_bytes())?;
 
         let cipher =
             XChaCha20Poly1305::new_from_slice(&key).map_err(|_| IronCoreError::CryptoError)?;
         let nonce = XNonce::from_slice(nonce_bytes);
 
-        let plaintext = cipher
+        let result = cipher
             .decrypt(nonce, ciphertext)
-            .map_err(|_| IronCoreError::CorruptionDetected)?;
+            .map_err(|_| IronCoreError::CorruptionDetected);
 
-        return String::from_utf8(plaintext).map_err(|_| IronCoreError::CorruptionDetected);
+        key.zeroize();
+        return String::from_utf8(result?).map_err(|_| IronCoreError::CorruptionDetected);
     }
 
     Err(IronCoreError::InvalidInput)

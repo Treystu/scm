@@ -38,10 +38,13 @@ impl RatchetSessionManager {
     /// Save all sessions to the persistent backend.
     pub fn save(&self) -> Result<()> {
         if let Some(backend) = &self.backend {
-            let json = self.serialize_sessions()?;
+            let mut json = self.serialize_sessions()?;
             backend
                 .put(b"ratchet_sessions_v1", json.as_bytes())
                 .map_err(|e| anyhow::anyhow!("Failed to save ratchet sessions: {}", e))?;
+            // Zeroize the JSON string containing all session secrets
+            use zeroize::Zeroize;
+            json.zeroize();
         }
         Ok(())
     }

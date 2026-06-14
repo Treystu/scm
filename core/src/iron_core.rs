@@ -1403,9 +1403,11 @@ impl IronCore {
         // Remove expired outbox messages older than 7 days
         let removed = self.outbox.write().remove_expired(604800);
         tracing::info!("Maintenance removed {} expired outbox messages", removed);
+        // Extract identity_id BEFORE acquiring audit_log (lock ordering: identity → audit_log)
+        let identity_id = self.identity.read().identity_id();
         self.audit_log.write().append(
             AuditEventType::StorageCompacted,
-            self.identity.read().identity_id(),
+            identity_id,
             None,
             Some(format!("removed={}", removed)),
         );
@@ -1552,7 +1554,13 @@ impl IronCore {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn contacts_manager(&self) -> crate::contacts_bridge::ContactManager {
         let path = self.storage_path.clone().unwrap_or_default();
-        crate::contacts_bridge::ContactManager::new(path).expect("Failed to create contact manager")
+        crate::contacts_bridge::ContactManager::new(path.clone())
+            .or_else(|_| crate::contacts_bridge::ContactManager::new(path))
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create contact manager: {:?}", e);
+                crate::contacts_bridge::ContactManager::new("".to_string())
+                    .expect("ContactManager fallback also failed")
+            })
     }
 
     /// Return the federated nickname for a contact (the nickname advertised by the peer).
@@ -1636,7 +1644,13 @@ impl IronCore {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn history_manager(&self) -> crate::mobile_bridge::HistoryManager {
         let path = self.storage_path.clone().unwrap_or_default();
-        crate::mobile_bridge::HistoryManager::new(path).expect("Failed to create history manager")
+        crate::mobile_bridge::HistoryManager::new(path.clone())
+            .or_else(|_| crate::mobile_bridge::HistoryManager::new(path))
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create history manager: {:?}", e);
+                crate::mobile_bridge::HistoryManager::new("".to_string())
+                    .expect("HistoryManager fallback also failed")
+            })
     }
 
     // -----------------------------------------------------------------------
@@ -2290,32 +2304,34 @@ impl IronCore {
             .is_blocked(&message.sender_id, sender_device_id.as_deref())
             .unwrap_or(false);
 
-        // Record in inbox and history
+        // Record in inbox and history (single lock acquisition prevents TOCTOU)
         let now = web_time::SystemTime::now()
             .duration_since(web_time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        let is_dup = self.inbox.write().is_duplicate(&message.id);
-        if !is_dup {
-            self.inbox.write().receive(ReceivedMessage {
-                message_id: message.id.clone(),
-                sender_id: message.sender_id.clone(),
-                payload: message.payload.clone(),
-                received_at: now,
-            });
-
-            let content = String::from_utf8(message.payload.clone()).unwrap_or_default();
-            let _ = self.history_manager.add(MessageRecord {
-                id: message.id.clone(),
-                direction: MessageDirection::Received,
-                peer_id: message.sender_id.clone(),
-                content,
-                timestamp: message.timestamp,
-                sender_timestamp: message.timestamp,
-                delivered: true,
-                hidden: is_blocked,
-            });
+        {
+            let mut inbox = self.inbox.write();
+            if !inbox.is_duplicate(&message.id) {
+                inbox.receive(ReceivedMessage {
+                    message_id: message.id.clone(),
+                    sender_id: message.sender_id.clone(),
+                    payload: message.payload.clone(),
+                    received_at: now,
+                });
+            }
         }
+
+        let content = String::from_utf8(message.payload.clone()).unwrap_or_default();
+        let _ = self.history_manager.add(MessageRecord {
+            id: message.id.clone(),
+            direction: MessageDirection::Received,
+            peer_id: message.sender_id.clone(),
+            content,
+            timestamp: message.timestamp,
+            sender_timestamp: message.timestamp,
+            delivered: true,
+            hidden: is_blocked,
+        });
 
         self.audit_log.write().append(
             AuditEventType::MessageReceived,
