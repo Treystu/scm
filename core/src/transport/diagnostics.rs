@@ -151,6 +151,12 @@ pub struct RoutingDecisionSnapshot {
     pub timestamp_ms: u64,
 }
 
+impl Default for RoutingTelemetry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoutingTelemetry {
     pub fn new() -> Self {
         Self {

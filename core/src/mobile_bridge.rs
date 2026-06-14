@@ -2920,6 +2920,14 @@ pub fn recommended_transport(peer_id: String) -> ProximityTransport {
     ProximityTransport::Ble
 }
 
+/// Generate a Signal-style safety number from two public keys (Ed25519 hex).
+/// Returns a 60-digit numeric string. Order-independent so both sides match.
+pub fn safety_number(our_pubkey_hex: String, their_pubkey_hex: String) -> String {
+    crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex).unwrap_or_else(|_| {
+        "00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000".to_string()
+    })
+}
+
 fn current_timestamp() -> u64 {
     web_time::SystemTime::now()
         .duration_since(web_time::UNIX_EPOCH)

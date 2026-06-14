@@ -15,14 +15,16 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contact {
     pub peer_id: String,
-    pub nickname: Option<String>, // Federated nickname (from the peer)
-    pub local_nickname: Option<String>, // Local override set by the user
+    pub nickname: Option<String>,
+    pub local_nickname: Option<String>,
     pub public_key: String,
     pub added_at: u64,
     pub last_seen: Option<u64>,
     pub notes: Option<String>,
     #[serde(default)]
-    pub last_known_device_id: Option<String>, // WS13.2: Last known device ID for tight pairing
+    pub last_known_device_id: Option<String>,
+    #[serde(default)]
+    pub verified_at: Option<u64>,
 }
 
 impl Contact {
@@ -36,6 +38,7 @@ impl Contact {
             last_seen: None,
             notes: None,
             last_known_device_id: None,
+            verified_at: None,
         }
     }
 

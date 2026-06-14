@@ -141,6 +141,50 @@ impl IdentityKeys {
     }
 }
 
+/// Generate a Signal-style safety number from two public keys.
+///
+/// Returns a 60-digit numeric string (12 groups of 5 digits, space-separated).
+/// The number is order-independent (sorted keys) so both sides display identically.
+pub fn safety_number(our_pubkey_hex: &str, their_pubkey_hex: &str) -> Result<String> {
+    let our_bytes = hex::decode(our_pubkey_hex)
+        .map_err(|e| anyhow::anyhow!("Invalid our pubkey hex: {}", e))?;
+    let their_bytes = hex::decode(their_pubkey_hex)
+        .map_err(|e| anyhow::anyhow!("Invalid their pubkey hex: {}", e))?;
+
+    if our_bytes.len() != 32 || their_bytes.len() != 32 {
+        return Err(anyhow::anyhow!("Public keys must be 32 bytes"));
+    }
+
+    // Sort keys to ensure order-independence
+    let (first, second) = if our_bytes <= their_bytes {
+        (&our_bytes, &their_bytes)
+    } else {
+        (&their_bytes, &our_bytes)
+    };
+
+    // blake3(first || second)
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(first);
+    hasher.update(second);
+    let hash = hasher.finalize();
+    let hash_bytes = hash.as_bytes();
+
+    // Convert hash bytes to decimal digits
+    // Use the hash bytes to generate enough digits
+    let mut digits = String::with_capacity(71); // 60 digits + 11 spaces
+    for group in 0..12 {
+        let offset = (group * 2) % 24;
+        let val = u16::from_be_bytes([hash_bytes[offset], hash_bytes[offset + 1]]) as u32;
+        let group_val = val % 100000;
+        if group > 0 {
+            digits.push(' ');
+        }
+        digits.push_str(&format!("{:05}", group_val));
+    }
+
+    Ok(digits)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

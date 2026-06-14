@@ -272,13 +272,14 @@ dictionary MeshSettings {
 
 dictionary Contact {
     string peer_id;
-    string? nickname;       // Federated nickname (from the peer)
-    string? local_nickname; // Local override set by the user
+    string? nickname;
+    string? local_nickname;
     string public_key;
     u64 added_at;
     u64? last_seen;
     string? notes;
-    string? last_known_device_id; // WS13.2: Last known device ID for tight pairing
+    string? last_known_device_id;
+    u64? verified_at;
 };
 
 
@@ -391,4 +392,5 @@ namespace api {
     BlockedIdentity blocked_identity_with_reason(BlockedIdentity blocked, string reason);
     BlockedIdentity blocked_identity_with_notes(BlockedIdentity blocked, string notes);
     ProximityTransport recommended_transport(string peer_id);
+    string safety_number(string our_pubkey_hex, string their_pubkey_hex);
 };
