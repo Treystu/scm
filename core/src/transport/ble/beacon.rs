@@ -3,14 +3,13 @@
 /// This module provides BLE beacon construction, parsing, and rotation logic.
 /// Beacons are encrypted advertisements that rotate every epoch (default 15 minutes).
 /// Only devices with the group key can decrypt and recognize beacons.
-
 use crate::transport::discovery::{decrypt_beacon_with_period, BeaconPayload};
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
     XChaCha20Poly1305,
 };
-use web_time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+use web_time::{SystemTime, UNIX_EPOCH};
 
 /// BLE Beacon service UUID (0xDF01)
 pub const BLE_BEACON_SERVICE_UUID: u16 = 0xDF01;
@@ -289,8 +288,7 @@ mod tests {
         let group_key = [0x42u8; 32];
         let node_pk = [0xaa; 32];
 
-        let builder = BeaconBuilder::new(group_key, node_pk)
-            .with_rotation_period(3600); // 1 hour
+        let builder = BeaconBuilder::new(group_key, node_pk).with_rotation_period(3600); // 1 hour
 
         let beacon = builder.build().expect("Beacon creation should succeed");
         assert!(!beacon.encrypted_payload.is_empty());
@@ -301,8 +299,7 @@ mod tests {
         let group_key = [0x42u8; 32];
         let node_pk = [0xaa; 32];
 
-        let builder = BeaconBuilder::new(group_key, node_pk)
-            .with_rotation_period(3600);
+        let builder = BeaconBuilder::new(group_key, node_pk).with_rotation_period(3600);
 
         let beacon = builder.build().expect("Beacon creation should succeed");
 
@@ -364,9 +361,6 @@ mod tests {
         let node_pk = [0xaa; 32];
 
         let builder = BeaconBuilder::new(group_key, node_pk);
-        assert_eq!(
-            builder.rotation_period_secs,
-            DEFAULT_BEACON_ROTATION_SECS
-        );
+        assert_eq!(builder.rotation_period_secs, DEFAULT_BEACON_ROTATION_SECS);
     }
 }
