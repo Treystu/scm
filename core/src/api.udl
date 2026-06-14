@@ -292,6 +292,15 @@ enum MessageDirection {
     "Received",
 };
 
+/// Canonical message status for UI rendering.
+/// Progress is monotone: Queued → InCustody/Sent → Delivered. Never regresses.
+enum MessageStatus {
+    "Queued",
+    "InCustody",
+    "Sent",
+    "Delivered",
+};
+
 dictionary MessageRecord {
     string id;
     MessageDirection direction;
@@ -300,8 +309,7 @@ dictionary MessageRecord {
     u64 timestamp;
     u64 sender_timestamp;
     boolean delivered;
-    /// When true, the message is from a blocked-only peer (evidentiary retention).
-    /// It is stored in the DB but hidden from all UI-facing queries.
+    MessageStatus status;
     boolean hidden;
 };
 

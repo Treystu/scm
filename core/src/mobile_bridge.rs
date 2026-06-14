@@ -1964,6 +1964,20 @@ pub enum MessageDirection {
     Received,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MessageStatus {
+    Queued,
+    InCustody,
+    Sent,
+    Delivered,
+}
+
+impl Default for MessageStatus {
+    fn default() -> Self {
+        MessageStatus::Queued
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageRecord {
     pub id: String,
@@ -1974,9 +1988,8 @@ pub struct MessageRecord {
     #[serde(default)]
     pub sender_timestamp: u64,
     pub delivered: bool,
-    /// When `true` the message is from a blocked-only peer and is retained for
-    /// evidentiary purposes but must be filtered out of all UI-facing queries.
-    /// The flag is cleared when the peer is unblocked.
+    #[serde(default)]
+    pub status: MessageStatus,
     #[serde(default)]
     pub hidden: bool,
 }
