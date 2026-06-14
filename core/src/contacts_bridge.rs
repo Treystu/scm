@@ -258,6 +258,30 @@ impl ContactManager {
         Ok(recovered)
     }
 
+    /// Merge contacts from another device using LWW-register CRDT semantics.
+    /// Higher `added_at` timestamp wins. For blocks, block always wins over unblock.
+    /// Returns the number of contacts updated.
+    pub fn merge_remote_contacts(
+        &self,
+        remote_contacts: Vec<Contact>,
+    ) -> Result<u32, crate::IronCoreError> {
+        let mut updated = 0;
+        for remote in remote_contacts {
+            if let Some(local) = self.get(remote.peer_id.clone())? {
+                // LWW: higher timestamp wins
+                if remote.added_at > local.added_at {
+                    self.add(remote)?;
+                    updated += 1;
+                }
+            } else {
+                // New contact from remote
+                self.add(remote)?;
+                updated += 1;
+            }
+        }
+        Ok(updated)
+    }
+
     /// Count total contacts
     pub fn count(&self) -> u32 {
         let db = self.db.lock();
