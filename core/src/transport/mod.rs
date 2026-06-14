@@ -2,6 +2,7 @@
 
 pub mod abstraction;
 pub mod behaviour;
+pub mod ble;
 pub mod bootstrap;
 pub mod capability;
 pub mod circuit_breaker;
