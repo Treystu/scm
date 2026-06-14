@@ -482,7 +482,9 @@ class ContactsViewModel @Inject constructor(
                     addedAt = (System.currentTimeMillis() / 1000).toULong(),
                     lastSeen = null,
                     notes = finalNotes,
-                    lastKnownDeviceId = null
+                    lastKnownDeviceId = null,
+                    verifiedAt = null,
+                    isTombstone = false
                 )
 
                 meshRepository.addContact(contact)

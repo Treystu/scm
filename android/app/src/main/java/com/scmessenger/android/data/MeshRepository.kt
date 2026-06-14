@@ -1084,7 +1084,9 @@ open class MeshRepository(private val context: Context) {
                         addedAt = contact.addedAt,
                         lastSeen = contact.lastSeen,
                         notes = updatedNotes,
-                        lastKnownDeviceId = null
+                        lastKnownDeviceId = null,
+                        verifiedAt = null,
+                        isTombstone = false
                     ))
                     cleaned++
                 }
@@ -1150,7 +1152,9 @@ open class MeshRepository(private val context: Context) {
                         addedAt = contact.addedAt,
                         lastSeen = contact.lastSeen,
                         notes = contact.notes,
-                        lastKnownDeviceId = contact.lastKnownDeviceId
+                        lastKnownDeviceId = contact.lastKnownDeviceId,
+                        verifiedAt = null,
+                        isTombstone = false
                     ))
                     repaired++
                 } else {
@@ -1750,7 +1754,7 @@ open class MeshRepository(private val context: Context) {
                                 routeNotes,
                                 normalizeOutboundListenerHints(hintedDialCandidates)
                             )
-                            val autoContact = uniffi.api.Contact(
+                             val autoContact = uniffi.api.Contact(
                                 peerId = canonicalPeerId,
                                 nickname = knownNickname,
                                 localNickname = null,
@@ -1758,7 +1762,9 @@ open class MeshRepository(private val context: Context) {
                                 addedAt = (System.currentTimeMillis() / 1000).toULong(),
                                 lastSeen = (System.currentTimeMillis() / 1000).toULong(),
                                 notes = routeNotes,
-                                lastKnownDeviceId = verifiedHints?.deviceId
+                                lastKnownDeviceId = verifiedHints?.deviceId,
+                                verifiedAt = null,
+                                isTombstone = false
                             )
                             try {
                                 contactManager?.add(autoContact)
@@ -1786,7 +1792,9 @@ open class MeshRepository(private val context: Context) {
                                     addedAt = existingContact.addedAt,
                                     lastSeen = existingContact.lastSeen,
                                     notes = existingContact.notes,
-                                    lastKnownDeviceId = verifiedHints?.deviceId ?: existingContact.lastKnownDeviceId
+                                    lastKnownDeviceId = verifiedHints?.deviceId ?: existingContact.lastKnownDeviceId,
+                                    verifiedAt = existingContact.verifiedAt,
+                                    isTombstone = false
                                 )
                                 try {
                                     contactManager?.add(updatedContact)
@@ -1819,7 +1827,9 @@ open class MeshRepository(private val context: Context) {
                                     addedAt = existingContact.addedAt,
                                     lastSeen = existingContact.lastSeen,
                                     notes = updatedNotesWithListeners,
-                                    lastKnownDeviceId = verifiedHints?.deviceId ?: existingContact.lastKnownDeviceId
+                                    lastKnownDeviceId = verifiedHints?.deviceId ?: existingContact.lastKnownDeviceId,
+                                    verifiedAt = existingContact.verifiedAt,
+                                    isTombstone = false
                                 )
                                 try {
                                     contactManager?.add(updatedContact)
@@ -1846,7 +1856,9 @@ open class MeshRepository(private val context: Context) {
                                     addedAt = existingContact.addedAt,
                                     lastSeen = existingContact.lastSeen,
                                     notes = updatedNotesWithListeners,
-                                    lastKnownDeviceId = verifiedHints?.deviceId ?: existingContact.lastKnownDeviceId
+                                    lastKnownDeviceId = verifiedHints?.deviceId ?: existingContact.lastKnownDeviceId,
+                                    verifiedAt = existingContact.verifiedAt,
+                                    isTombstone = false
                                 )
                                 try {
                                     contactManager?.add(updatedContact)
@@ -1945,6 +1957,7 @@ open class MeshRepository(private val context: Context) {
                                             timestamp = obj.getLong("ts").toULong(),
                                             senderTimestamp = obj.getLong("sts").toULong(),
                                             delivered = obj.getBoolean("del"),
+                                            status = if (obj.getBoolean("del")) uniffi.api.MessageStatus.DELIVERED else uniffi.api.MessageStatus.SENT,
                                             hidden = false
                                         )
                                         historyManager?.add(record)
@@ -2002,6 +2015,7 @@ open class MeshRepository(private val context: Context) {
                             timestamp = canonicalTimestamp,
                             senderTimestamp = senderTimestamp,
                             delivered = true,
+                            status = uniffi.api.MessageStatus.DELIVERED,
                             hidden = false
                         )
                         historyManager?.add(record)
@@ -3502,7 +3516,9 @@ open class MeshRepository(private val context: Context) {
                     if (contact.lastSeen!! > currentLastSeen) contact.lastSeen else currentLastSeen
                 } else existingWithKey.lastSeen,
                 notes = contact.notes ?: existingWithKey.notes,
-                lastKnownDeviceId = contact.lastKnownDeviceId ?: existingWithKey.lastKnownDeviceId
+                lastKnownDeviceId = contact.lastKnownDeviceId ?: existingWithKey.lastKnownDeviceId,
+                verifiedAt = contact.verifiedAt ?: existingWithKey.verifiedAt,
+                isTombstone = false
             )
         } else {
             val canonical = canonicalId(contact.peerId)
@@ -3515,7 +3531,9 @@ open class MeshRepository(private val context: Context) {
                     addedAt = contact.addedAt,
                     lastSeen = contact.lastSeen,
                     notes = contact.notes,
-                    lastKnownDeviceId = contact.lastKnownDeviceId
+                    lastKnownDeviceId = contact.lastKnownDeviceId,
+                    verifiedAt = contact.verifiedAt,
+                    isTombstone = contact.isTombstone
                 )
             } else {
                 contact
@@ -3554,7 +3572,9 @@ open class MeshRepository(private val context: Context) {
                         addedAt = existing.addedAt,
                         lastSeen = existing.lastSeen,
                         notes = existing.notes,
-                        lastKnownDeviceId = existing.lastKnownDeviceId
+                        lastKnownDeviceId = existing.lastKnownDeviceId,
+                        verifiedAt = existing.verifiedAt,
+                        isTombstone = false
                     ))
                 }
                 return true
@@ -3578,7 +3598,9 @@ open class MeshRepository(private val context: Context) {
                 addedAt = (System.currentTimeMillis() / 1000).toULong(),
                 lastSeen = null,
                 notes = null,
-                lastKnownDeviceId = null
+                lastKnownDeviceId = null,
+                verifiedAt = null,
+                isTombstone = false
             )
             addContact(contact)
             return true
@@ -4150,6 +4172,7 @@ open class MeshRepository(private val context: Context) {
                 timestamp = now,
                 senderTimestamp = now,
                 delivered = false,
+                status = uniffi.api.MessageStatus.QUEUED,
                 hidden = false
             )
 
@@ -4252,6 +4275,7 @@ open class MeshRepository(private val context: Context) {
                             timestamp = now,
                             senderTimestamp = now,
                             delivered = false,
+                            status = uniffi.api.MessageStatus.QUEUED,
                             hidden = false
                         )
                         historyManager?.add(reconciledRecord)
@@ -7147,7 +7171,9 @@ open class MeshRepository(private val context: Context) {
                 addedAt = contact.addedAt,
                 lastSeen = contact.lastSeen,
                 notes = withListeners,
-                lastKnownDeviceId = contact.lastKnownDeviceId
+                lastKnownDeviceId = contact.lastKnownDeviceId,
+                verifiedAt = contact.verifiedAt,
+                isTombstone = false
             )
             try {
                 contactManager?.add(updated)
@@ -7250,7 +7276,9 @@ open class MeshRepository(private val context: Context) {
                 addedAt = existing?.addedAt ?: now,
                 lastSeen = now,
                 notes = notes,
-                lastKnownDeviceId = deviceId?.trim()?.takeIf { it.isNotEmpty() } ?: existing?.lastKnownDeviceId
+                lastKnownDeviceId = deviceId?.trim()?.takeIf { it.isNotEmpty() } ?: existing?.lastKnownDeviceId,
+                verifiedAt = existing?.verifiedAt,
+                isTombstone = false
             )
 
             try {
@@ -7823,7 +7851,9 @@ open class MeshRepository(private val context: Context) {
             addedAt = (System.currentTimeMillis() / 1000).toULong(),
             lastSeen = (System.currentTimeMillis() / 1000).toULong(),
             notes = "Emergency contact created during peer discovery",
-            lastKnownDeviceId = null
+            lastKnownDeviceId = null,
+            verifiedAt = null,
+            isTombstone = false
         )
 
         // Save to database
@@ -8735,7 +8765,9 @@ open class MeshRepository(private val context: Context) {
                             addedAt = System.currentTimeMillis().toULong(),
                             lastSeen = null,
                             notes = "Emergency contact recovered from message history",
-                            lastKnownDeviceId = null
+                            lastKnownDeviceId = null,
+                            verifiedAt = null,
+                            isTombstone = false
                         )
                         contacts.add(contact)
                         recoveredCount++
