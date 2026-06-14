@@ -22,6 +22,7 @@ pub mod routing;
 pub mod swarm;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod websocket;
+pub mod wifi_aware;
 
 pub use behaviour::{
     DeregistrationPayload, DeregistrationRequest, IronCoreBehaviour, LedgerExchangeRequest,

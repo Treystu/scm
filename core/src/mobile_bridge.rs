@@ -1,13 +1,15 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use libp2p::{Multiaddr, PeerId};
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
 use crate::settings::MeshSettings;
+use crate::transport::wifi_aware::{WifiAwareError, WifiAwarePlatformBridge};
 use crate::transport::SwarmHandle;
 
 // MOBILE SERVICE
@@ -171,12 +173,9 @@ pub struct MeshService {
     relay_budget: std::sync::Arc<Mutex<u32>>,
     swarm_headless_mode: std::sync::Arc<Mutex<Option<bool>>>,
     current_device_profile: Mutex<Option<DeviceProfile>>,
-    /// Current device state snapshot — drives threshold-based behavior.
-    /// Stored behind a `parking_lot::RwLock` so reads (very frequent) never
-    /// contend with writes (infrequent platform callbacks).
     device_state: RwLock<Option<DeviceState>>,
-    /// Engine for computing adaptive mesh behavior based on device state.
     auto_adjust: Arc<AutoAdjustEngine>,
+    wifi_aware_bridge: Arc<Mutex<Option<Arc<PlatformWifiAwareBridge>>>>,
     /// Platform-provided delegate for decentralized protocol events (Phase 4).
     external_delegate: Arc<Mutex<Option<Box<dyn crate::CoreDelegate>>>>,
 }
@@ -202,6 +201,7 @@ impl MeshService {
             auto_adjust: Arc::new(AutoAdjustEngine::new()),
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             external_delegate: Arc::new(Mutex::new(None)),
+            wifi_aware_bridge: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -225,6 +225,7 @@ impl MeshService {
             auto_adjust: Arc::new(AutoAdjustEngine::new()),
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             external_delegate: Arc::new(Mutex::new(None)),
+            wifi_aware_bridge: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -252,6 +253,7 @@ impl MeshService {
             auto_adjust: Arc::new(AutoAdjustEngine::new()),
             nearby_ble_peers: Arc::new(Mutex::new(HashSet::new())),
             external_delegate: Arc::new(Mutex::new(None)),
+            wifi_aware_bridge: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -324,6 +326,15 @@ impl MeshService {
         let budget = *self.relay_budget.lock();
         if budget > 0 {
             core.drift_activate();
+        }
+
+        // Initialize WiFi Aware transport if enabled and platform bridge is set
+        if self.platform_bridge.lock().is_some() {
+            let aware_bridge = Arc::new(PlatformWifiAwareBridge::new_platform_ref(
+                self.platform_bridge.clone(),
+            ));
+            *self.wifi_aware_bridge.lock() = Some(aware_bridge);
+            tracing::info!("WiFi Aware bridge adapter initialized");
         }
 
         // Update state
@@ -1527,6 +1538,169 @@ pub trait PlatformBridge: Send + Sync {
         data: Vec<u8>,
     );
     fn send_proximity_packet(&self, peer_id: String, transport: ProximityTransport, data: Vec<u8>);
+    fn wifi_aware_publish(&self, service_name: String, service_info: Vec<u8>) -> bool;
+    fn wifi_aware_subscribe(&self, service_name: String) -> bool;
+    fn wifi_aware_create_data_path(&self, peer_id: String, pmk: Vec<u8>) -> bool;
+    fn wifi_aware_stop(&self);
+}
+
+pub trait WifiAwareCallback: Send + Sync {
+    fn on_service_discovered(&self, peer_id: String, service_info: Vec<u8>, rssi: i32);
+    fn on_data_path_confirmed(&self, peer_id: String, ip_address: String, port: u16);
+}
+
+// ============================================================================
+// WIFI AWARE PLATFORM BRIDGE ADAPTER
+// ============================================================================
+
+/// Adapter that bridges the synchronous UniFFI PlatformBridge to the async
+/// WifiAwarePlatformBridge trait used by WifiAwareTransport.
+///
+/// Control commands (publish, subscribe, create_data_path) are forwarded to
+/// the platform via PlatformBridge methods. Callbacks from the platform are
+/// routed through channels to satisfy async await patterns.
+#[allow(clippy::type_complexity)]
+pub struct PlatformWifiAwareBridge {
+    platform_bridge: std::sync::Arc<Mutex<Option<Box<dyn PlatformBridge>>>>,
+    discovered_peers: Arc<Mutex<HashMap<String, (Vec<u8>, i32)>>>,
+    data_path_results: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<std::net::SocketAddr>>>>,
+}
+
+impl PlatformWifiAwareBridge {
+    pub fn new_platform_ref(
+        platform_bridge: std::sync::Arc<Mutex<Option<Box<dyn PlatformBridge>>>>,
+    ) -> Self {
+        Self {
+            platform_bridge,
+            discovered_peers: Arc::new(Mutex::new(HashMap::new())),
+            data_path_results: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn with_platform<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&dyn PlatformBridge) -> R,
+    {
+        self.platform_bridge.lock().as_ref().map(|b| f(b.as_ref()))
+    }
+
+    pub fn handle_service_discovered(&self, peer_id: String, service_info: Vec<u8>, rssi: i32) {
+        self.discovered_peers
+            .lock()
+            .insert(peer_id.clone(), (service_info.clone(), rssi));
+    }
+
+    pub fn handle_data_path_confirmed(&self, peer_id: String, ip_address: String, port: u16) {
+        if let Ok(addr) = format!("{}:{}", ip_address, port).parse::<std::net::SocketAddr>() {
+            let mut results = self.data_path_results.lock();
+            if let Some(tx) = results.remove(&peer_id) {
+                let _ = tx.send(addr);
+            }
+        }
+    }
+
+    pub fn get_discovered_peer(&self, peer_id: &str) -> Option<(Vec<u8>, i32)> {
+        self.discovered_peers.lock().get(peer_id).cloned()
+    }
+}
+
+#[async_trait]
+impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
+    async fn is_available(&self) -> Result<bool, WifiAwareError> {
+        Ok(self.with_platform(|_| true).unwrap_or(false))
+    }
+
+    async fn publish_service(
+        &self,
+        service_name: &str,
+        service_info: &[u8],
+    ) -> Result<(), WifiAwareError> {
+        let ok = self
+            .with_platform(|b| {
+                b.wifi_aware_publish(service_name.to_string(), service_info.to_vec())
+            })
+            .unwrap_or(false);
+        if ok {
+            Ok(())
+        } else {
+            Err(WifiAwareError::PlatformError("Publish failed".into()))
+        }
+    }
+
+    async fn subscribe_to_services(
+        &self,
+        service_name: &str,
+        _match_filter: Option<&[u8]>,
+    ) -> Result<(), WifiAwareError> {
+        let ok = self
+            .with_platform(|b| b.wifi_aware_subscribe(service_name.to_string()))
+            .unwrap_or(false);
+        if ok {
+            Ok(())
+        } else {
+            Err(WifiAwareError::PlatformError("Subscribe failed".into()))
+        }
+    }
+
+    async fn unpublish_service(&self) -> Result<(), WifiAwareError> {
+        if let Some(b) = self.platform_bridge.lock().as_ref() {
+            b.wifi_aware_stop();
+        }
+        Ok(())
+    }
+
+    async fn unsubscribe_from_services(&self) -> Result<(), WifiAwareError> {
+        if let Some(b) = self.platform_bridge.lock().as_ref() {
+            b.wifi_aware_stop();
+        }
+        Ok(())
+    }
+
+    async fn create_data_path(
+        &self,
+        peer_id: &str,
+        pmk: &[u8; 32],
+    ) -> Result<std::net::SocketAddr, WifiAwareError> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.data_path_results
+            .lock()
+            .insert(peer_id.to_string(), tx);
+
+        let ok = self
+            .with_platform(|b| b.wifi_aware_create_data_path(peer_id.to_string(), pmk.to_vec()))
+            .unwrap_or(false);
+
+        if !ok {
+            self.data_path_results.lock().remove(peer_id);
+            return Err(WifiAwareError::DataPathFailed(
+                "Platform rejected data path creation".into(),
+            ));
+        }
+
+        rx.recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|_| {
+                self.data_path_results.lock().remove(peer_id);
+                WifiAwareError::DataPathFailed("Data path confirmation timed out".into())
+            })
+    }
+
+    async fn close_data_path(&self, _peer_id: &str) -> Result<(), WifiAwareError> {
+        Ok(())
+    }
+
+    fn set_on_service_discovered(
+        &self,
+        _callback: Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>,
+    ) {
+    }
+
+    fn set_on_message_received(&self, _callback: Box<dyn Fn(String, Vec<u8>) + Send + Sync>) {}
+
+    fn set_on_data_path_confirmed(
+        &self,
+        _callback: Box<dyn Fn(String, std::net::SocketAddr) + Send + Sync>,
+    ) {
+    }
 }
 
 // ============================================================================

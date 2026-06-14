@@ -183,6 +183,15 @@ callback interface PlatformBridge {
     void send_ble_packet(string peer_id, bytes data);
     void on_proximity_data_received(string peer_id, ProximityTransport transport, bytes data);
     void send_proximity_packet(string peer_id, ProximityTransport transport, bytes data);
+    boolean wifi_aware_publish(string service_name, bytes service_info);
+    boolean wifi_aware_subscribe(string service_name);
+    boolean wifi_aware_create_data_path(string peer_id, bytes pmk);
+    void wifi_aware_stop();
+};
+
+callback interface WifiAwareCallback {
+    void on_service_discovered(string peer_id, bytes service_info, i32 rssi);
+    void on_data_path_confirmed(string peer_id, string ip_address, u16 port);
 };
 
 // ============================================================================
