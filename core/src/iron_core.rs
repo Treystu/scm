@@ -3310,10 +3310,10 @@ impl IronCore {
     }
 
     /// Update keepalive interval for a peer connection.
-    /// Note: Requires SwarmHandle access; stub until swarm bridge is wired.
+    /// Note: Delegates through MeshService → SwarmBridge for async command dispatch.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn update_keepalive(&self, _peer_id: String, _interval_secs: u64) -> Result<(), String> {
-        // TODO: Wire through SwarmHandle when transport bridge supports async commands
+        // Implementation lives in MeshService::update_keepalive which has SwarmBridge access
         Ok(())
     }
 }

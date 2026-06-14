@@ -422,6 +422,24 @@ impl MeshService {
         *self.platform_bridge.lock() = bridge;
     }
 
+    /// Update keepalive interval for a peer connection.
+    pub fn update_keepalive(
+        &self,
+        peer_id: String,
+        interval_secs: u64,
+    ) -> Result<(), crate::IronCoreError> {
+        let peer_id_parsed: PeerId = peer_id
+            .parse()
+            .map_err(|_| crate::IronCoreError::InvalidInput)?;
+        let handle_guard = self.swarm_bridge.handle.lock();
+        let handle = handle_guard
+            .as_ref()
+            .ok_or(crate::IronCoreError::NetworkError)?;
+        let rt = self.swarm_bridge.get_runtime_handle();
+        rt.block_on(handle.update_keepalive(peer_id_parsed, interval_secs))
+            .map_err(|_| crate::IronCoreError::NetworkError)
+    }
+
     /// Get current NAT status string.
     pub fn get_nat_status(&self) -> String {
         self.nat_status.lock().clone()
