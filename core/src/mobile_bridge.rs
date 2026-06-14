@@ -1964,18 +1964,13 @@ pub enum MessageDirection {
     Received,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum MessageStatus {
+    #[default]
     Queued,
     InCustody,
     Sent,
     Delivered,
-}
-
-impl Default for MessageStatus {
-    fn default() -> Self {
-        MessageStatus::Queued
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3266,6 +3261,7 @@ mod tests {
                     timestamp: 1_777_000_000,
                     sender_timestamp: 1_777_000_000,
                     delivered: false,
+                    status: MessageStatus::default(),
                     hidden: false,
                 })
                 .unwrap();
@@ -3297,6 +3293,7 @@ mod tests {
                 timestamp: 100,
                 sender_timestamp: 100,
                 delivered: false,
+                status: MessageStatus::default(),
                 hidden: false,
             })
             .unwrap();
@@ -3309,6 +3306,7 @@ mod tests {
                 timestamp: 200,
                 sender_timestamp: 200,
                 delivered: false,
+                status: MessageStatus::default(),
                 hidden: false,
             })
             .unwrap();
@@ -3321,6 +3319,7 @@ mod tests {
                 timestamp: 300,
                 sender_timestamp: 300,
                 delivered: true,
+                status: MessageStatus::Delivered,
                 hidden: false,
             })
             .unwrap();
