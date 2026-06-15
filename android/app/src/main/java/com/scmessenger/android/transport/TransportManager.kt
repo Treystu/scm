@@ -527,6 +527,12 @@ class TransportManager @JvmOverloads constructor(
     }
 
     /**
+     * Get the WiFi Aware transport instance (for PlatformBridge FFI wiring).
+     * Returns null if WiFi Aware is not initialized or not available.
+     */
+    fun getWifiAwareTransport(): WifiAwareTransport? = wifiAware
+
+    /**
      * Cleanup all resources.
      */
     fun cleanup() {

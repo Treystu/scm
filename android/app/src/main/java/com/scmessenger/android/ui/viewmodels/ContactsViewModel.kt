@@ -89,6 +89,11 @@ class ContactsViewModel @Inject constructor(
     private val _nearbyPeers = MutableStateFlow<List<NearbyPeer>>(emptyList())
     val nearbyPeers: StateFlow<List<NearbyPeer>> = _nearbyPeers.asStateFlow()
 
+    // Nearby rescan state — true while a rescan is actively running
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+    private var scanStartTimeMs = 0L
+
     init {
         loadContacts()
         observeNearbyPeers()
@@ -733,8 +738,28 @@ class ContactsViewModel @Inject constructor(
      * discoveries immediately rather than waiting for the next periodic scan.
      */
     fun refreshDiscovery() {
-        Timber.d("refreshDiscovery requested; replaying cached discoveries")
-        meshRepository.replayDiscoveredPeerEvents()
+        if (_isScanning.value) return // already scanning
+        _isScanning.value = true
+        scanStartTimeMs = System.currentTimeMillis()
+        Timber.d("refreshDiscovery: starting rescan")
+
+        viewModelScope.launch {
+            // Replay cached discoveries immediately
+            meshRepository.replayDiscoveredPeerEvents()
+
+            // Trigger actual BLE/WiFi rescan by restarting transport discovery
+            try {
+                meshRepository.triggerTransportRescan()
+            } catch (e: Exception) {
+                Timber.w(e, "Transport rescan failed")
+            }
+
+            // Keep scanning state active for at least 10s to allow BLE/WiFi
+            // discovery to find new peers, then auto-clear
+            delay(10_000L)
+            _isScanning.value = false
+            Timber.d("refreshDiscovery: rescan complete (${System.currentTimeMillis() - scanStartTimeMs}ms)")
+        }
     }
 
     /**

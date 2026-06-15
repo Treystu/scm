@@ -363,4 +363,28 @@ mod tests {
         let builder = BeaconBuilder::new(group_key, node_pk);
         assert_eq!(builder.rotation_period_secs, DEFAULT_BEACON_ROTATION_SECS);
     }
+
+    /// iOS overflow-area advertising has a 28-byte payload limit.
+    /// The encrypted beacon (service_uuid + encrypted_payload) must fit.
+    #[test]
+    fn test_beacon_fits_ios_overflow_area() {
+        let group_key = [0x42u8; 32];
+        let node_pk = [0xaa; 32];
+
+        let builder = BeaconBuilder::new(group_key, node_pk);
+        let beacon = builder.build().expect("Beacon creation should succeed");
+
+        // iOS overflow area: 28 bytes max for service data
+        // beacon.size() = 2 (service_uuid) + encrypted_payload.len()
+        const IOS_OVERFLOW_MAX: usize = 28;
+
+        assert!(
+            beacon.size() <= IOS_OVERFLOW_MAX,
+            "Beacon ({} bytes) exceeds iOS overflow area limit ({} bytes). \
+             service_uuid=2 + encrypted_payload={}",
+            beacon.size(),
+            IOS_OVERFLOW_MAX,
+            beacon.encrypted_payload.len()
+        );
+    }
 }

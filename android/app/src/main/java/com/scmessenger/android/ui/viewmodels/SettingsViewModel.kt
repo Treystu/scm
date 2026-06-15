@@ -311,6 +311,14 @@ class SettingsViewModel @Inject constructor(
                     emitIdentityInfo(cachedIdentityInfo)
                     return@launch
                 }
+                // P0_SHARED_IDENTITY: Check the published StateFlow first — this
+                // catches identity that was just created in another ViewModel
+                // (e.g., onboarding) before the non-blocking FFI path runs.
+                val published = meshRepository.identityInfo.value
+                if (published != null && published.initialized) {
+                    emitIdentityInfo(published)
+                    return@launch
+                }
                 // Use non-blocking variant to avoid triggering service init
                 // from the UI layer (prevents serviceState → loadIdentity loop).
                 val info = meshRepository.getIdentityInfoNonBlocking()

@@ -93,13 +93,17 @@ class IdentityViewModel @Inject constructor(
     }
 
     init {
-        // P0_SHARED_IDENTITY: Mirror the centralized meshRepository.identityInfo
-        // StateFlow into the local _identityInfo. Because StateFlow has replay=1
-        // semantics through the repo (the repo's flow was set to MutableStateFlow
-        // which always replays its current value to new subscribers), this means
-        // a fresh IdentityViewModel constructed after the repo has been hydrated
-        // immediately gets the real identity without polling. This is the core
-        // fix for the "Show Identity QR -> not initialized" bug.
+        // P0_SHARED_IDENTITY: Immediately read the published StateFlow value
+        // SYNCHRONOUSLY before any coroutines. This eliminates the race where
+        // the UI renders "Restoring identity" because the collector hasn't
+        // received the first value yet. StateFlow.value is always available.
+        val published = meshRepository.identityInfo.value
+        if (published != null && published.initialized) {
+            _identityInfo.value = published
+        }
+
+        // Mirror the centralized meshRepository.identityInfo StateFlow for
+        // ongoing updates (e.g., nickname change, service restart).
         viewModelScope.launch(Dispatchers.IO) {
             meshRepository.identityInfo.collect { info ->
                 if (_identityInfo.value != info) {
@@ -190,6 +194,12 @@ class IdentityViewModel @Inject constructor(
      *     on this device — short-circuit immediately, no retry, render create form.
      */
     private suspend fun readIdentityWithRetry(forceRefresh: Boolean): uniffi.api.IdentityInfo? {
+        // P0_SHARED_IDENTITY: Check the published StateFlow first — this catches
+        // identity that was just created or already loaded by another ViewModel.
+        val published = meshRepository.identityInfo.value
+        if (published != null && published.initialized) {
+            return published
+        }
         val firstAttempt = meshRepository.getIdentityInfoNonBlocking()
         if (firstAttempt != null && firstAttempt.initialized) {
             return firstAttempt
@@ -213,7 +223,7 @@ class IdentityViewModel @Inject constructor(
             // Already have initialized data in this VM; don't churn.
             return _identityInfo.value
         }
-        val backoffMs = longArrayOf(50L, 100L, 200L, 400L, 800L)
+        val backoffMs = longArrayOf(100L, 200L, 400L, 800L, 1_000L, 1_500L)
         for ((index, delay) in backoffMs.withIndex()) {
             kotlinx.coroutines.delay(delay)
             val attempt = try {
@@ -230,6 +240,14 @@ class IdentityViewModel @Inject constructor(
         Timber.w("P0_QR_FIX: identity not visible from Rust core after retry loop; backup exists but core unhydrated")
         return firstAttempt
     }
+
+    /**
+     * Check if an identity backup exists on disk (SharedPreferences or sentinel file).
+     * Used by IdentityScreen to distinguish "no identity ever created" from
+     * "identity exists but Rust core hasn't hydrated yet" — the latter should show
+     * a "Restoring identity…" spinner instead of the creation form.
+     */
+    fun isBackupAvailable(): Boolean = meshRepository.isIdentityInitialized()
 
     /**
      * Create a new identity (first-time setup).

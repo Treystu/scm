@@ -123,22 +123,33 @@ fun IdentityScreen(
                 }
 
                 identityInfo == null || identityInfo?.initialized != true -> {
-                    // Identity not initialized
-                    // P0_ANDROID_IDENTITY_PROOF_OF_WORK: pass the progress stage
-                    // down to IdentityNotInitializedView so the user sees the 6
-                    // named stages of cryptographic work, not just a spinner.
-                    IdentityNotInitializedView(
-                        isCreating = isLoading,
-                        progressStage = progressStage,
-                        // P0_ANDROID_PROGRESS_CALLBACK: pass the parent's
-                        // collected sub-stage detail down to the leaf
-                        // composable so it can be passed to
-                        // IdentityProgressDisplay. Collecting here keeps
-                        // the leaf stateless w.r.t. the ViewModel.
-                        progressSubDetail = progressSubDetail,
-                        onCreateIdentity = { nickname -> viewModel.createIdentity(nickname) },
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    // P0_SHARED_IDENTITY: if an identity backup exists on disk but
+                    // the Rust core hasn't hydrated yet (cold start, slow service),
+                    // show a "Restoring" spinner instead of the creation form.
+                    // But ONLY if we're actually loading — if loadIdentity() completed
+                    // and still returned null, the identity genuinely doesn't exist.
+                    if (viewModel.isBackupAvailable() && isLoading) {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator()
+                            Text(
+                                text = "Restoring your identity…",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        IdentityNotInitializedView(
+                            isCreating = isLoading,
+                            progressStage = progressStage,
+                            progressSubDetail = progressSubDetail,
+                            onCreateIdentity = { nickname -> viewModel.createIdentity(nickname) },
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
                 }
 
                 else -> {

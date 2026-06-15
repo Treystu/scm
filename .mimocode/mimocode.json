@@ -1,0 +1,84 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "description": "Default agent for Rust/mobile development with full tool permissions",
+      "model": "XiaomiMiMo/mimo-v2.5-pro",
+      "permissions": {
+        "bash": true,
+        "edit": true,
+        "write": true,
+        "read": true
+      }
+    },
+    "plan": {
+      "description": "Read-only analysis for code exploration and solution design",
+      "model": "XiaomiMiMo/mimo-v2.5-pro",
+      "permissions": {
+        "bash": false,
+        "edit": false,
+        "write": false,
+        "read": true
+      }
+    },
+    "compose": {
+      "description": "Orchestration mode for spec-driven development using Fable 5 plan",
+      "model": "XiaomiMiMo/mimo-v2.5-pro",
+      "permissions": {
+        "bash": true,
+        "edit": true,
+        "write": true,
+        "read": true
+      }
+    },
+    "rust-coder": {
+      "description": "Specialized for Rust core development, compilation fixes, and cargo operations",
+      "model": "XiaomiMiMo/mimo-v2.5-pro",
+      "permissions": {
+        "bash": true,
+        "edit": true,
+        "write": true,
+        "read": true
+      }
+    },
+    "mobile-dev": {
+      "description": "Specialized for Android/Kotlin and iOS/Swift development",
+      "model": "XiaomiMiMo/mimo-v2.5-pro",
+      "permissions": {
+        "bash": true,
+        "edit": true,
+        "write": true,
+        "read": true
+      }
+    },
+    "reviewer": {
+      "description": "Reviews code for correctness, security, and philosophy compliance",
+      "model": "XiaomiMiMo/mimo-v2.5-pro",
+      "permissions": {
+        "bash": false,
+        "edit": false,
+        "write": false,
+        "read": true
+      }
+    }
+  },
+  "mode": {
+    "compose": {
+      "skills": ["plan", "execute", "review", "tdd", "debug", "verify", "merge"]
+    }
+  },
+  "plugin": [],
+  "command": {
+    "fable5": {
+      "template": "Execute Fable 5 plan tasks from the master backlog.\n\nProject root: /Users/scmessenger/Documents/Github/SCMessenger_Clean\nPlan file: fable5plan.md\n\n## Task Execution Protocol\n\n1. Read fable5plan.md to identify the next task in dependency order\n2. Check task dependencies are satisfied (prior tasks completed)\n3. Switch to the appropriate agent based on task type:\n   - Track 5 (CI/hygiene) → rust-coder agent\n   - Track 1 (Transport) → rust-coder + mobile-dev agents\n   - Track 2 (DTN) → rust-coder agent\n   - Track 3 (Routing) → rust-coder agent\n   - Track 4 (Crypto/UI) → rust-coder + mobile-dev agents\n4. Execute the task following the Implementation section exactly\n5. Run the Verification section checks\n6. Mark task complete and move to next\n\n## Dependency Graph\nT5.1 → T5.2 → T5.3 → T5.4 → T5.5 → T5.6\n                ↘ T5.7 (after T5.5 artifacts)\nT5.8, T5.9 — parallel anytime after T5.1\n\nT1.1 (requires T5.7 gate live) → T1.2 → T1.3\n                               → T1.4\nT1.5, T1.6 — parallel after T5.4\nT1.7 after T1.1\n\nT2.1 — after T5.4\nT2.2 — after T2.1\nT2.3 — after T2.2\nT2.4 — after T2.3 + T1.6\nT2.5 — after T2.3\n\nT3.1 — after T5.4\nT3.2 — after T3.1\nT3.3 — after T2.5 + T3.1\nT3.4 — after T3.3\n\nT4.1 — after T5.4\nT4.2 — after T5.7\nT4.3 — after T2.3\nT4.4 — after T5.7\nT4.5 — after T4.1\n\nArguments: $ARGUMENTS"
+    },
+    "gatekeeper": {
+      "template": "Gatekeeper review for SCMessenger_Clean workspace.\n\nThis command ensures only verified, clean code enters the SCMessenger_Clean workspace.\nThe pre-existing SCMessenger repo is the working workspace for consolidation/pruning.\n\n## Gatekeeper Protocol\n\n1. Run `cargo check --workspace` on the clean workspace\n2. Run `cargo clippy --workspace --all-features -- -D warnings`\n3. Run `cargo fmt --check`\n4. Run `cargo test --workspace` (non-ignored tests)\n5. Verify no build artifacts committed: `git ls-files | grep -E '\\.(so|dylib|apk)$'` returns empty\n6. Verify no hardcoded paths: `grep -r 'kanal\\|Users\\\\' core/.cargo/` returns empty\n7. If all checks pass, approve the update\n8. If any check fails, reject and report the specific failure\n\n## Workspace Distinction\n- SCMessenger_Clean: Gatekeeper-approved only. This is the production workspace.\n- SCMessenger: Pre-existing repo. Working workspace for development, consolidation, pruning.\n\nArguments: $ARGUMENTS"
+    },
+    "orchestrate": {
+      "template": "SCMessenger Swarm Orchestrator for MiMo Code.\n\nDelegates work to subagents using MiMo Code's native subagent system.\nNo external scripts needed — uses MiMo Code's built-in agent orchestration.\n\n## Orchestration Protocol\n\n1. Read fable5plan.md to identify available tasks\n2. Check task dependencies\n3. Spawn subagents using MiMo Code's agent system:\n   - Use `build` agent for implementation tasks\n   - Use `plan` agent for analysis tasks\n   - Use `reviewer` agent for verification tasks\n4. Monitor subagent progress via task tracking\n5. Run gatekeeper checks on completion\n6. Update task status\n\n## Dynamic Pacing\n- MiMo Auto (free): Use for all tasks, no quota concerns\n- OpenRouter/xiaomi/mimo-v2.5-pro: Primary model for complex tasks\n- OpenRouter fallbacks: claude-opus-4.8 for critical architecture decisions\n\n## Operational Rules\n- Max 3 concurrent subagents\n- Verify after each completion: cargo check, cargo test\n- Git commit after each verified task completion\n- Never push without explicit user approval\n\nArguments: $ARGUMENTS"
+    }
+  },
+  "username": "scmessenger",
+  "disabled_providers": ["opencode", "opencode-go"]
+}

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -3193,7 +3194,13 @@ open class MeshRepository(private val context: Context) {
         meshService?.setPlatformBridge(bridge)
         // Wire TransportManager to AndroidPlatformBridge for BLE adjustment application
         if (bridge is com.scmessenger.android.service.AndroidPlatformBridge) {
-            transportManager?.let { bridge.setTransportManager(it) }
+            transportManager?.let { tm ->
+                bridge.setTransportManager(tm)
+                // Wire WiFi Aware transport for PlatformBridge FFI delegation
+                tm.getWifiAwareTransport()?.let { aware ->
+                    bridge.setWifiAwareTransport(aware)
+                }
+            }
             // Wire BLE components into platform bridge for data forwarding
             bridge.setBleComponents(bleAdvertiser, bleScanner, bleGattClient, bleGattServer)
         }
@@ -3889,6 +3896,14 @@ open class MeshRepository(private val context: Context) {
      * This is non-blocking and safe to call from the main thread during UI composition.
      */
     fun getIdentityInfoNonBlocking(): uniffi.api.IdentityInfo? {
+        // P0_SHARED_IDENTITY: Check the published StateFlow first — this is the
+        // fastest path and catches identity that was just created in another
+        // ViewModel (e.g., onboarding) before the core/cache paths run.
+        val published = _identityInfo.value
+        if (published != null && published.initialized) {
+            return published
+        }
+
         // Try to get identity info even if the service isn't fully RUNNING yet.
         // ironCore may already have identity loaded from sled before the swarm
         // finishes binding. This eliminates the 30-60s polling gap in Settings UI.
@@ -4408,6 +4423,24 @@ open class MeshRepository(private val context: Context) {
      * 3. Rust core identity database check (authoritative)
      */
     fun isIdentityInitialized(): Boolean {
+        // P0_SHARED_IDENTITY: Check the published StateFlow first — this is the
+        // fastest path and catches identity that was just created in another
+        // ViewModel (e.g., onboarding) before cache/backup checks run.
+        val published = _identityInfo.value
+        if (published != null && published.initialized) {
+            return true
+        }
+
+        // P0: Check the identity cache (SharedPreferences) — this is populated
+        // by cacheIdentityFields() immediately after initializeIdentity() succeeds,
+        // before persistIdentityBackup() runs. This eliminates the race where
+        // isIdentityInitialized() returns false because the backup hasn't been
+        // written yet.
+        val cached = readCachedIdentityFields()
+        if (cached != null && cached.initialized) {
+            return true
+        }
+
         // Check if we have an identity backup first (fast path)
         if (identityBackupPrefs.contains(IDENTITY_BACKUP_KEY)) {
             // P0_ANDROID_010: Verify Rust core also has the identity.
@@ -4520,14 +4553,20 @@ open class MeshRepository(private val context: Context) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     // P0_ANDROID_PROGRESS_CALLBACK: stage 1 — visible during the
-                    // up-to-10s ensureServiceInitialized wait, which is the longest
-                    // blocking piece on a cold start and the wall the user
-                    // perceives as a hang. Fire it before the wait so the UI
-                    // recomposes immediately.
+                    // ensureServiceInitialized wait, which is the longest blocking
+                    // piece on a cold start and the wall the user perceives as a hang.
+                    // Fire it before the wait so the UI recomposes immediately.
+                    // The progress callback is now passed through so ensureServiceInitialized
+                    // can fire periodic elapsed-time updates during the wait.
                     progress(IdentityCreationEvent.PreparingStorage, "Waking the encrypted key vault…")
-                    if (!ensureServiceInitialized() || ironCore == null) {
-                        Timber.e("IronCore is null after ensureServiceInitialized! Cannot create identity.")
-                        return@withContext
+                    if (!ensureServiceInitialized(progress) || ironCore == null) {
+                        // Throw instead of silent return — the ViewModel catch block
+                        // will set _identityError and reset _isCreating, giving the
+                        // user visible feedback instead of a frozen progress display.
+                        throw IllegalStateException(
+                            "Service initialization timed out — identity cannot be created. " +
+                            "The encrypted storage is taking longer than expected to start."
+                        )
                     }
                     // P0_ANDROID_024 (Bug 3): Skip if identity is already initialized.
                     // Multiple UI surfaces (Onboarding, Settings) and onRuntimePermissionsGranted
@@ -4536,10 +4575,12 @@ open class MeshRepository(private val context: Context) {
                     val current = ironCore?.getIdentityInfo()
                     if (current?.initialized == true) {
                         Timber.d("createIdentity: identity already initialized (id=${current.identityId?.take(8)}); skipping")
-                        // P0_ANDROID_PROGRESS_CALLBACK: drive the UI to the final
-                        // stage instead of vanishing mid-way on subsequent clicks.
-                        // The display will hold on VerifyingIdentity briefly before
-                        // the MainViewModel's 600ms tail-delay and Idle flip.
+                        // P0_SHARED_IDENTITY: publish existing identity so the UI
+                        // state flips to initialized even on redundant create calls.
+                        // Without this, the StateFlow stays null and IdentityScreen
+                        // shows the creation form again.
+                        cacheIdentityFields(current)
+                        publishIdentityInfo(current)
                         progress(IdentityCreationEvent.VerifyingIdentity, "Identity already on disk; verifying…")
                         return@withContext
                     }
@@ -4554,6 +4595,15 @@ open class MeshRepository(private val context: Context) {
                     progress(IdentityCreationEvent.GeneratingKeypair, null)
                     Timber.d("Calling ironCore.initializeIdentity()...")
                     ironCore?.initializeIdentity()
+                    // P0_SHARED_IDENTITY: publish identity IMMEDIATELY after keygen
+                    // succeeds, before backup/swarm steps. If persistIdentityBackup or
+                    // initializeAndStartSwarm fails, the UI still knows identity exists
+                    // and won't show the redundant creation form.
+                    val created = ironCore?.getIdentityInfo()
+                    if (created != null && created.initialized) {
+                        cacheIdentityFields(created)
+                        publishIdentityInfo(created)
+                    }
                     ensureLocalIdentityFederation()
                     // P0_ANDROID_PROGRESS_CALLBACK: stage 4 — fingerprint is
                     // computed by the Rust core during initializeIdentity; we
@@ -4564,14 +4614,12 @@ open class MeshRepository(private val context: Context) {
                     progress(IdentityCreationEvent.ComputingFingerprint, "Hashing your key…")
                     persistIdentityBackup(ironCore, customSalt, progress)
                     Timber.i("Identity created successfully")
-                    // P0_SHARED_IDENTITY: publish the freshly-created identity to all
-                    // subscribers (Main/Identity/Settings VMs) so any open screen
-                    // showing "not initialized" immediately gets the new state.
-                    val created = ironCore?.getIdentityInfo()
-                    if (created != null && created.initialized) {
-                        cacheIdentityFields(created)
+                    // Publish again after backup to ensure latest state (nickname, etc.)
+                    val finalInfo = ironCore?.getIdentityInfo()
+                    if (finalInfo != null && finalInfo.initialized) {
+                        cacheIdentityFields(finalInfo)
                     }
-                    publishIdentityInfo(created)
+                    publishIdentityInfo(finalInfo)
                     // P0_ANDROID_PROGRESS_CALLBACK: stage 6 — final verification
                     // step that starts the libp2p swarm listener and updates
                     // the BLE beacon. The libp2p TCP bind on port 9001 can
@@ -4579,7 +4627,15 @@ open class MeshRepository(private val context: Context) {
                     // listener…" gives the user motion during that wait.
                     progress(IdentityCreationEvent.VerifyingIdentity, "Starting swarm listener…")
                     // Identity is now available; bring up internet transport if it was deferred.
-                    initializeAndStartSwarm()
+                    // Fire-and-forget: the swarm startup is slow (~5-10s for TCP bind + mDNS)
+                    // but identity is already created and published. Don't block the UI.
+                    repoScope.launch {
+                        try {
+                            initializeAndStartSwarm()
+                        } catch (e: Exception) {
+                            Timber.w(e, "Swarm startup failed after identity creation (non-blocking)")
+                        }
+                    }
                     updateBleIdentityBeacon()
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to create identity")
@@ -4679,9 +4735,16 @@ open class MeshRepository(private val context: Context) {
 
     /**
      * Non-blocking variant for suspend functions that require the service to be running.
-     * Waits up to 10 seconds for MeshService to reach RUNNING state using delay().
+     * Waits up to 60 seconds for MeshService to reach RUNNING state using delay().
+     *
+     * Accepts an optional progress callback so the UI can show elapsed time during
+     * the potentially long cold-start wait (sled DB init, manager setup, data migration).
+     * Fires PreparingStorage periodically with elapsed-seconds info so the user sees
+     * motion instead of a frozen "4 seconds remaining" display.
      */
-    private suspend fun ensureServiceInitialized(): Boolean {
+    private suspend fun ensureServiceInitialized(
+        progress: IdentityProgressCallback = { _, _ -> }
+    ): Boolean {
         // Fast path: already running
         if (meshService?.getState() == uniffi.api.ServiceState.RUNNING && ironCore != null) {
             return true
@@ -4690,16 +4753,26 @@ open class MeshRepository(private val context: Context) {
         // Start initialization if needed
         ensureServiceInitializedDeferred()
 
-        // Wait for service to actually start (with timeout)
+        // Wait for service to actually start (with generous timeout for cold starts).
+        // Cold-start on low-end devices can take 30-60s due to sled DB init, manager
+        // construction, and data migrations. The old 10s timeout caused silent failures
+        // where createIdentity() returned without creating identity or notifying the UI.
         val startTime = System.currentTimeMillis()
-        val timeoutMs = 10_000L
+        val timeoutMs = 60_000L
+        var lastProgressMs = 0L
         while (System.currentTimeMillis() - startTime < timeoutMs) {
             if (meshService?.getState() == uniffi.api.ServiceState.RUNNING && ironCore != null) {
                 return true
             }
-            kotlinx.coroutines.delay(100)
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed - lastProgressMs >= 2_000L) {
+                lastProgressMs = elapsed
+                progress(IdentityCreationEvent.PreparingStorage,
+                    "Starting secure service… (${elapsed / 1000}s)")
+            }
+            kotlinx.coroutines.delay(200)
         }
-        Timber.w("ensureServiceInitialized timed out after ${timeoutMs}ms")
+        Timber.e("ensureServiceInitialized timed out after ${timeoutMs}ms")
         return false
     }
 
@@ -4856,6 +4929,25 @@ open class MeshRepository(private val context: Context) {
         return ledgerManager?.dialableAddresses() ?: emptyList()
     }
 
+    /**
+     * Trigger an actual BLE + WiFi rescan for nearby peer discovery.
+     * Restarts BLE scanning and WiFi P2P discovery to find new peers.
+     */
+    fun triggerTransportRescan() {
+        repoScope.launch {
+            try {
+                // Restart BLE scanning
+                transportManager?.let { tm ->
+                    tm.stopAll()
+                    delay(200)
+                    tm.startAll()
+                }
+                Timber.d("triggerTransportRescan: BLE + WiFi restarted")
+            } catch (e: Exception) {
+                Timber.w(e, "triggerTransportRescan failed")
+            }
+        }
+    }
 
     fun replayDiscoveredPeerEvents() {
         repoScope.launch {

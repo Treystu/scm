@@ -932,13 +932,11 @@ impl IronCore {
         let keys = identity.keys();
         let libp2p_peer_id = keys.and_then(|k| match k.to_libp2p_peer_id() {
             Ok(pid) => {
-                println!("[IDENTITY_DIAG] to_libp2p_peer_id OK: {}", pid);
+                tracing::debug!("to_libp2p_peer_id OK: {}", pid);
                 Some(pid)
             }
             Err(e) => {
-                let msg = format!("[IDENTITY_DIAG] to_libp2p_peer_id FAILED: {:?}", e);
-                println!("{}", msg);
-                tracing::error!("{}", msg);
+                tracing::error!("to_libp2p_peer_id FAILED: {:?}", e);
                 None
             }
         });

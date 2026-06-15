@@ -58,8 +58,7 @@ fn main() {
             "x86_64-linux-android",
             "i686-linux-android",
         ] {
-            candidate_paths
-                .push(target_dir.join(format!("{triple}/debug/libscmessenger_core.so")));
+            candidate_paths.push(target_dir.join(format!("{triple}/debug/libscmessenger_core.so")));
             candidate_paths
                 .push(target_dir.join(format!("{triple}/release/libscmessenger_core.so")));
         }

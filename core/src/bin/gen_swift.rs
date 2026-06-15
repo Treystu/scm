@@ -57,8 +57,7 @@ fn main() {
             "aarch64-apple-ios",
             "aarch64-apple-ios-sim",
         ] {
-            candidate_paths
-                .push(target_dir.join(format!("{triple}/debug/libscmessenger_core.so")));
+            candidate_paths.push(target_dir.join(format!("{triple}/debug/libscmessenger_core.so")));
             candidate_paths
                 .push(target_dir.join(format!("{triple}/release/libscmessenger_core.so")));
         }

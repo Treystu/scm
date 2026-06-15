@@ -817,10 +817,21 @@ final class MeshRepository {
     ///
     /// Intentionally lightweight — reads current ironCore state only.
     /// Do NOT call ensureServiceInitialized() here; this function is called
-    /// from inside startMeshService() and a recursive ensureServiceInitialized()
-    /// would destroy the service being started (nulling meshService/ironCore mid-flight).
+    /// Check if identity is initialized.
+    /// Multi-tier detection matching Android's approach:
+    /// 1. Rust core check (authoritative)
+    /// 2. Keychain backup check (fast path for cold starts where core hasn't hydrated)
+    /// Note: This is called from inside startMeshService() and a recursive
+    /// ensureServiceInitialized() would destroy the service being started.
     func isIdentityInitialized() -> Bool {
-        return ironCore?.getIdentityInfo().initialized == true
+        if ironCore?.getIdentityInfo().initialized == true {
+            return true
+        }
+        // P0: Check Keychain backup as fallback — matches Android's SharedPreferences
+        // backup check in MeshRepository.isIdentityInitialized(). On cold starts the
+        // Rust core may not have hydrated from sled yet, but the Keychain backup
+        // is immediately available.
+        return readIdentityBackupFromKeychain() != nil
     }
 
     /// Create a new identity (first-time setup)
@@ -835,6 +846,10 @@ final class MeshRepository {
                 throw MeshError.notInitialized("Mesh service initialization failed")
             }
 
+            // P0: Grant consent before identity initialization.
+            // The Rust core requires consent_granted=true for initialize_identity().
+            // Android already does this; adding for iOS parity.
+            ironCore.grantConsent()
             logVerbose("Calling ironCore.initializeIdentity()...")
             try ironCore.initializeIdentity()
             try ensureLocalIdentityFederation()
@@ -856,6 +871,11 @@ final class MeshRepository {
         if !info.initialized {
             let restored = restoreIdentityFromKeychain(ironCore: ironCore)
             if restored {
+                // P0: Grant consent after successful Keychain restore.
+                // The Rust core starts with consent_granted=false, but if we have a
+                // persisted identity backup, the user already consented in a prior session.
+                // Matches Android's pattern in MeshRepository.kt:3033.
+                ironCore.grantConsent()
                 info = ironCore.getIdentityInfo()
             }
         }
@@ -863,6 +883,12 @@ final class MeshRepository {
             logVerbose("Identity not initialized; onboarding required")
             return
         }
+
+        // P0: Ensure consent is granted whenever identity is initialized.
+        // This handles the case where identity was loaded from sled but consent wasn't set
+        // (e.g., after a process restart where consent_granted resets to false).
+        // grantConsent is idempotent — calling it when already granted is a no-op.
+        ironCore.grantConsent()
 
         let nickname = info.nickname?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !nickname.isEmpty {
