@@ -1,0 +1,223 @@
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public func uniffiCloneHandle() -> UInt64 {
+    public struct NoHandle {
+    public struct NoHandle {
+    public struct NoHandle {
+    public struct NoHandle {
+    public struct NoHandle {
+    public struct NoHandle {
+    public struct NoHandle {
+    public struct NoHandle {
+open class AutoAdjustEngine: AutoAdjustEngineProtocol, @unchecked Sendable {
+open class ContactManager: ContactManagerProtocol, @unchecked Sendable {
+open class HistoryManager: HistoryManagerProtocol, @unchecked Sendable {
+open class IronCore: IronCoreProtocol, @unchecked Sendable {
+open class LedgerManager: LedgerManagerProtocol, @unchecked Sendable {
+open class MeshService: MeshServiceProtocol, @unchecked Sendable {
+open class MeshSettingsManager: MeshSettingsManagerProtocol, @unchecked Sendable {
+open class SwarmBridge: SwarmBridgeProtocol, @unchecked Sendable {
+public enum AdjustmentProfile: Equatable, Hashable {
+public enum AuditEventType: Equatable, Hashable {
+public enum ConnectionPathState: Equatable, Hashable {
+public enum DiscoveryMode: Equatable, Hashable {
+public enum IronCoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+public enum MessageDirection: Equatable, Hashable {
+public enum MessageStatus: Equatable, Hashable {
+public enum MessageType: Equatable, Hashable {
+public enum MotionState: Equatable, Hashable {
+public enum NetworkType: Equatable, Hashable {
+public enum NotificationKind: Equatable, Hashable {
+public enum ProximityTransport: Equatable, Hashable {
+public enum ServiceState: Equatable, Hashable {
+public func FfiConverterCallbackInterfaceCoreDelegate_lift(_ handle: UInt64) throws -> CoreDelegate {
+public func FfiConverterCallbackInterfaceCoreDelegate_lower(_ v: CoreDelegate) -> UInt64 {
+public func FfiConverterCallbackInterfacePlatformBridge_lift(_ handle: UInt64) throws -> PlatformBridge {
+public func FfiConverterCallbackInterfacePlatformBridge_lower(_ v: PlatformBridge) -> UInt64 {
+public func FfiConverterTypeAdjustmentProfile_lift(_ buf: RustBuffer) throws -> AdjustmentProfile {
+public func FfiConverterTypeAdjustmentProfile_lower(_ value: AdjustmentProfile) -> RustBuffer {
+public func FfiConverterTypeAuditEventType_lift(_ buf: RustBuffer) throws -> AuditEventType {
+public func FfiConverterTypeAuditEventType_lower(_ value: AuditEventType) -> RustBuffer {
+public func FfiConverterTypeAuditEvent_lift(_ buf: RustBuffer) throws -> AuditEvent {
+public func FfiConverterTypeAuditEvent_lower(_ value: AuditEvent) -> RustBuffer {
+public func FfiConverterTypeAutoAdjustEngine_lift(_ handle: UInt64) throws -> AutoAdjustEngine {
+public func FfiConverterTypeAutoAdjustEngine_lower(_ value: AutoAdjustEngine) -> UInt64 {
+public func FfiConverterTypeBehaviorAdjustment_lift(_ buf: RustBuffer) throws -> BehaviorAdjustment {
+public func FfiConverterTypeBehaviorAdjustment_lower(_ value: BehaviorAdjustment) -> RustBuffer {
+public func FfiConverterTypeBleAdjustment_lift(_ buf: RustBuffer) throws -> BleAdjustment {
+public func FfiConverterTypeBleAdjustment_lower(_ value: BleAdjustment) -> RustBuffer {
+public func FfiConverterTypeBlockedIdentity_lift(_ buf: RustBuffer) throws -> BlockedIdentity {
+public func FfiConverterTypeBlockedIdentity_lower(_ value: BlockedIdentity) -> RustBuffer {
+public func FfiConverterTypeConnectionPathState_lift(_ buf: RustBuffer) throws -> ConnectionPathState {
+public func FfiConverterTypeConnectionPathState_lower(_ value: ConnectionPathState) -> RustBuffer {
+public func FfiConverterTypeContactManager_lift(_ handle: UInt64) throws -> ContactManager {
+public func FfiConverterTypeContactManager_lower(_ value: ContactManager) -> UInt64 {
+public func FfiConverterTypeContact_lift(_ buf: RustBuffer) throws -> Contact {
+public func FfiConverterTypeContact_lower(_ value: Contact) -> RustBuffer {
+public func FfiConverterTypeDeviceProfile_lift(_ buf: RustBuffer) throws -> DeviceProfile {
+public func FfiConverterTypeDeviceProfile_lower(_ value: DeviceProfile) -> RustBuffer {
+public func FfiConverterTypeDeviceState_lift(_ buf: RustBuffer) throws -> DeviceState {
+public func FfiConverterTypeDeviceState_lower(_ value: DeviceState) -> RustBuffer {
+public func FfiConverterTypeDiscoveryMode_lift(_ buf: RustBuffer) throws -> DiscoveryMode {
+public func FfiConverterTypeDiscoveryMode_lower(_ value: DiscoveryMode) -> RustBuffer {
+public func FfiConverterTypeDiskStats_lift(_ buf: RustBuffer) throws -> DiskStats {
+public func FfiConverterTypeDiskStats_lower(_ value: DiskStats) -> RustBuffer {
+public func FfiConverterTypeHistoryManager_lift(_ handle: UInt64) throws -> HistoryManager {
+public func FfiConverterTypeHistoryManager_lower(_ value: HistoryManager) -> UInt64 {
+public func FfiConverterTypeHistoryStats_lift(_ buf: RustBuffer) throws -> HistoryStats {
+public func FfiConverterTypeHistoryStats_lower(_ value: HistoryStats) -> RustBuffer {
+public func FfiConverterTypeIdentityInfo_lift(_ buf: RustBuffer) throws -> IdentityInfo {
+public func FfiConverterTypeIdentityInfo_lower(_ value: IdentityInfo) -> RustBuffer {
+public func FfiConverterTypeIronCoreError_lift(_ buf: RustBuffer) throws -> IronCoreError {
+public func FfiConverterTypeIronCoreError_lower(_ value: IronCoreError) -> RustBuffer {
+public func FfiConverterTypeIronCore_lift(_ handle: UInt64) throws -> IronCore {
+public func FfiConverterTypeIronCore_lower(_ value: IronCore) -> UInt64 {
+public func FfiConverterTypeLedgerEntry_lift(_ buf: RustBuffer) throws -> LedgerEntry {
+public func FfiConverterTypeLedgerEntry_lower(_ value: LedgerEntry) -> RustBuffer {
+public func FfiConverterTypeLedgerManager_lift(_ handle: UInt64) throws -> LedgerManager {
+public func FfiConverterTypeLedgerManager_lower(_ value: LedgerManager) -> UInt64 {
+public func FfiConverterTypeMeshServiceConfig_lift(_ buf: RustBuffer) throws -> MeshServiceConfig {
+public func FfiConverterTypeMeshServiceConfig_lower(_ value: MeshServiceConfig) -> RustBuffer {
+public func FfiConverterTypeMeshService_lift(_ handle: UInt64) throws -> MeshService {
+public func FfiConverterTypeMeshService_lower(_ value: MeshService) -> UInt64 {
+public func FfiConverterTypeMeshSettingsManager_lift(_ handle: UInt64) throws -> MeshSettingsManager {
+public func FfiConverterTypeMeshSettingsManager_lower(_ value: MeshSettingsManager) -> UInt64 {
+public func FfiConverterTypeMeshSettings_lift(_ buf: RustBuffer) throws -> MeshSettings {
+public func FfiConverterTypeMeshSettings_lower(_ value: MeshSettings) -> RustBuffer {
+public func FfiConverterTypeMessageDirection_lift(_ buf: RustBuffer) throws -> MessageDirection {
+public func FfiConverterTypeMessageDirection_lower(_ value: MessageDirection) -> RustBuffer {
+public func FfiConverterTypeMessageRecord_lift(_ buf: RustBuffer) throws -> MessageRecord {
+public func FfiConverterTypeMessageRecord_lower(_ value: MessageRecord) -> RustBuffer {
+public func FfiConverterTypeMessageRequest_lift(_ buf: RustBuffer) throws -> MessageRequest {
+public func FfiConverterTypeMessageRequest_lower(_ value: MessageRequest) -> RustBuffer {
+public func FfiConverterTypeMessageStatus_lift(_ buf: RustBuffer) throws -> MessageStatus {
+public func FfiConverterTypeMessageStatus_lower(_ value: MessageStatus) -> RustBuffer {
+public func FfiConverterTypeMessageType_lift(_ buf: RustBuffer) throws -> MessageType {
+public func FfiConverterTypeMessageType_lower(_ value: MessageType) -> RustBuffer {
+public func FfiConverterTypeMotionState_lift(_ buf: RustBuffer) throws -> MotionState {
+public func FfiConverterTypeMotionState_lower(_ value: MotionState) -> RustBuffer {
+public func FfiConverterTypeNetworkType_lift(_ buf: RustBuffer) throws -> NetworkType {
+public func FfiConverterTypeNetworkType_lower(_ value: NetworkType) -> RustBuffer {
+public func FfiConverterTypeNotificationDecision_lift(_ buf: RustBuffer) throws -> NotificationDecision {
+public func FfiConverterTypeNotificationDecision_lower(_ value: NotificationDecision) -> RustBuffer {
+public func FfiConverterTypeNotificationKind_lift(_ buf: RustBuffer) throws -> NotificationKind {
+public func FfiConverterTypeNotificationKind_lower(_ value: NotificationKind) -> RustBuffer {
+public func FfiConverterTypeNotificationMessageContext_lift(_ buf: RustBuffer) throws -> NotificationMessageContext {
+public func FfiConverterTypeNotificationMessageContext_lower(_ value: NotificationMessageContext) -> RustBuffer {
+public func FfiConverterTypeNotificationUiState_lift(_ buf: RustBuffer) throws -> NotificationUiState {
+public func FfiConverterTypeNotificationUiState_lower(_ value: NotificationUiState) -> RustBuffer {
+public func FfiConverterTypePeelResult_lift(_ buf: RustBuffer) throws -> PeelResult {
+public func FfiConverterTypePeelResult_lower(_ value: PeelResult) -> RustBuffer {
+public func FfiConverterTypePreparedMessage_lift(_ buf: RustBuffer) throws -> PreparedMessage {
+public func FfiConverterTypePreparedMessage_lower(_ value: PreparedMessage) -> RustBuffer {
+public func FfiConverterTypeProximityTransport_lift(_ buf: RustBuffer) throws -> ProximityTransport {
+public func FfiConverterTypeProximityTransport_lower(_ value: ProximityTransport) -> RustBuffer {
+public func FfiConverterTypeReceivedMessage_lift(_ buf: RustBuffer) throws -> ReceivedMessage {
+public func FfiConverterTypeReceivedMessage_lower(_ value: ReceivedMessage) -> RustBuffer {
+public func FfiConverterTypeRegistrationStateInfo_lift(_ buf: RustBuffer) throws -> RegistrationStateInfo {
+public func FfiConverterTypeRegistrationStateInfo_lower(_ value: RegistrationStateInfo) -> RustBuffer {
+public func FfiConverterTypeRelayAdjustment_lift(_ buf: RustBuffer) throws -> RelayAdjustment {
+public func FfiConverterTypeRelayAdjustment_lower(_ value: RelayAdjustment) -> RustBuffer {
+public func FfiConverterTypeServiceState_lift(_ buf: RustBuffer) throws -> ServiceState {
+public func FfiConverterTypeServiceState_lower(_ value: ServiceState) -> RustBuffer {
+public func FfiConverterTypeServiceStats_lift(_ buf: RustBuffer) throws -> ServiceStats {
+public func FfiConverterTypeServiceStats_lower(_ value: ServiceStats) -> RustBuffer {
+public func FfiConverterTypeSignatureResult_lift(_ buf: RustBuffer) throws -> SignatureResult {
+public func FfiConverterTypeSignatureResult_lower(_ value: SignatureResult) -> RustBuffer {
+public func FfiConverterTypeSwarmBridge_lift(_ handle: UInt64) throws -> SwarmBridge {
+public func FfiConverterTypeSwarmBridge_lower(_ value: SwarmBridge) -> UInt64 {
+public func FfiConverterTypeTtlConfig_lift(_ buf: RustBuffer) throws -> TtlConfig {
+public func FfiConverterTypeTtlConfig_lower(_ value: TtlConfig) -> RustBuffer {
+public func blockedIdentityNew(peerId: String) -> BlockedIdentity  {
+public func blockedIdentityWithDeviceId(blocked: BlockedIdentity, deviceId: String) -> BlockedIdentity  {
+public func blockedIdentityWithNotes(blocked: BlockedIdentity, notes: String) -> BlockedIdentity  {
+public func blockedIdentityWithReason(blocked: BlockedIdentity, reason: String) -> BlockedIdentity  {
+public func uniffiEnsureScmessengerCoreInitialized() {
+public protocol AutoAdjustEngineProtocol: AnyObject, Sendable {
+public protocol ContactManagerProtocol: AnyObject, Sendable {
+public protocol CoreDelegate: AnyObject, Sendable {
+public protocol HistoryManagerProtocol: AnyObject, Sendable {
+public protocol IronCoreProtocol: AnyObject, Sendable {
+public protocol LedgerManagerProtocol: AnyObject, Sendable {
+public protocol MeshServiceProtocol: AnyObject, Sendable {
+public protocol MeshSettingsManagerProtocol: AnyObject, Sendable {
+public protocol PlatformBridge: AnyObject, Sendable {
+public protocol SwarmBridgeProtocol: AnyObject, Sendable {
+public struct AuditEvent: Equatable, Hashable {
+public struct BehaviorAdjustment: Equatable, Hashable {
+public struct BleAdjustment: Equatable, Hashable {
+public struct BlockedIdentity: Equatable, Hashable {
+public struct Contact: Equatable, Hashable {
+public struct DeviceProfile: Equatable, Hashable {
+public struct DeviceState: Equatable, Hashable {
+public struct DiskStats: Equatable, Hashable {
+public struct FfiConverterTypeAdjustmentProfile: FfiConverterRustBuffer {
+public struct FfiConverterTypeAuditEvent: FfiConverterRustBuffer {
+public struct FfiConverterTypeAuditEventType: FfiConverterRustBuffer {
+public struct FfiConverterTypeAutoAdjustEngine: FfiConverter {
+public struct FfiConverterTypeBehaviorAdjustment: FfiConverterRustBuffer {
+public struct FfiConverterTypeBleAdjustment: FfiConverterRustBuffer {
+public struct FfiConverterTypeBlockedIdentity: FfiConverterRustBuffer {
+public struct FfiConverterTypeConnectionPathState: FfiConverterRustBuffer {
+public struct FfiConverterTypeContact: FfiConverterRustBuffer {
+public struct FfiConverterTypeContactManager: FfiConverter {
+public struct FfiConverterTypeDeviceProfile: FfiConverterRustBuffer {
+public struct FfiConverterTypeDeviceState: FfiConverterRustBuffer {
+public struct FfiConverterTypeDiscoveryMode: FfiConverterRustBuffer {
+public struct FfiConverterTypeDiskStats: FfiConverterRustBuffer {
+public struct FfiConverterTypeHistoryManager: FfiConverter {
+public struct FfiConverterTypeHistoryStats: FfiConverterRustBuffer {
+public struct FfiConverterTypeIdentityInfo: FfiConverterRustBuffer {
+public struct FfiConverterTypeIronCore: FfiConverter {
+public struct FfiConverterTypeIronCoreError: FfiConverterRustBuffer {
+public struct FfiConverterTypeLedgerEntry: FfiConverterRustBuffer {
+public struct FfiConverterTypeLedgerManager: FfiConverter {
+public struct FfiConverterTypeMeshService: FfiConverter {
+public struct FfiConverterTypeMeshServiceConfig: FfiConverterRustBuffer {
+public struct FfiConverterTypeMeshSettings: FfiConverterRustBuffer {
+public struct FfiConverterTypeMeshSettingsManager: FfiConverter {
+public struct FfiConverterTypeMessageDirection: FfiConverterRustBuffer {
+public struct FfiConverterTypeMessageRecord: FfiConverterRustBuffer {
+public struct FfiConverterTypeMessageRequest: FfiConverterRustBuffer {
+public struct FfiConverterTypeMessageStatus: FfiConverterRustBuffer {
+public struct FfiConverterTypeMessageType: FfiConverterRustBuffer {
+public struct FfiConverterTypeMotionState: FfiConverterRustBuffer {
+public struct FfiConverterTypeNetworkType: FfiConverterRustBuffer {
+public struct FfiConverterTypeNotificationDecision: FfiConverterRustBuffer {
+public struct FfiConverterTypeNotificationKind: FfiConverterRustBuffer {
+public struct FfiConverterTypeNotificationMessageContext: FfiConverterRustBuffer {
+public struct FfiConverterTypeNotificationUiState: FfiConverterRustBuffer {
+public struct FfiConverterTypePeelResult: FfiConverterRustBuffer {
+public struct FfiConverterTypePreparedMessage: FfiConverterRustBuffer {
+public struct FfiConverterTypeProximityTransport: FfiConverterRustBuffer {
+public struct FfiConverterTypeReceivedMessage: FfiConverterRustBuffer {
+public struct FfiConverterTypeRegistrationStateInfo: FfiConverterRustBuffer {
+public struct FfiConverterTypeRelayAdjustment: FfiConverterRustBuffer {
+public struct FfiConverterTypeServiceState: FfiConverterRustBuffer {
+public struct FfiConverterTypeServiceStats: FfiConverterRustBuffer {
+public struct FfiConverterTypeSignatureResult: FfiConverterRustBuffer {
+public struct FfiConverterTypeSwarmBridge: FfiConverter {
+public struct FfiConverterTypeTtlConfig: FfiConverterRustBuffer {
+public struct HistoryStats: Equatable, Hashable {
+public struct IdentityInfo: Equatable, Hashable {
+public struct LedgerEntry: Equatable, Hashable {
+public struct MeshServiceConfig: Equatable, Hashable {
+public struct MeshSettings: Equatable, Hashable {
+public struct MessageRecord: Equatable, Hashable {
+public struct MessageRequest: Equatable, Hashable {
+public struct NotificationDecision: Equatable, Hashable {
+public struct NotificationMessageContext: Equatable, Hashable {
+public struct NotificationUiState: Equatable, Hashable {
+public struct PeelResult: Equatable, Hashable {
+public struct PreparedMessage: Equatable, Hashable {
+public struct ReceivedMessage: Equatable, Hashable {
+public struct RegistrationStateInfo: Equatable, Hashable {
+public struct RelayAdjustment: Equatable, Hashable {
+public struct ServiceStats: Equatable, Hashable {
+public struct SignatureResult: Equatable, Hashable {
+public struct TtlConfig: Equatable, Hashable {

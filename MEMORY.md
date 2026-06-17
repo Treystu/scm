@@ -44,16 +44,17 @@ iOS/           → Swift app (Xcode, iOS 17.0 min)
 ## Execution Order (Fable 5 Plan)
 Track 5 (CI/hygiene) FIRST → Track 1 (FFI/transport) → Tracks 2-4 in parallel
 
-## Tool Configuration
-- **Primary Model:** openrouter/xiaomi/mimo-v2.5-pro (via MiMo Code)
-- **Free Fallback:** mimo/mimo-auto (1M context, zero cost)
-- **Critical Fallback:** openrouter/anthropic/claude-opus-4.8
-- **Agent Pool:** build, plan, compose, rust-coder, mobile-dev, reviewer
+## Orchestration Model
+- **Primary orchestrator, planner, verifier, and implementer:** Kimi (this session / Moderato subscription). Kimi owns architecture decisions, task decomposition, final review, security-critical paths, and user communication.
+- **OpenRouter free-tier augmentation:** MiMo Code agents (`openrouter/nex-agi/nex-n2-pro:free`, `openrouter/google/gemma-4-31b-it:free`, `openrouter/openai/gpt-oss-20b:free`, `openrouter/nvidia/nemotron-nano-9b-v2:free`, `openrouter/openrouter/free`) are used only for easy/mechanical sub-tasks to stretch Kimi budget.
+- **No paid OpenRouter usage:** `openrouter/openrouter/fusion` and `openrouter/anthropic/claude-opus-4.8` are configured but not used unless explicitly authorized.
+- **MiMo Code backend:** OpenRouter at `https://openrouter.ai/api/v1` for MiMo's OpenAI-compatible adapter; Claude Code uses the Anthropic-compatible `https://openrouter.ai/api`. Direct Xiaomi MiMo credentials are optional and not the SCMessenger_Clean default.
+- **Agent Pool:** build, plan, compose, rust-coder, mobile-dev, reviewer, free-router (OpenRouter free router), fusion (paid — disabled by policy)
 
 ## MiMo Code Features in Use
 - **Persistent Memory:** This MEMORY.md + checkpoint.md + notes.md
 - **Task Tracking:** Tree-shaped T1, T1.1, T1.2… system
-- **Subagents:** Native parallel subagent orchestration
+- **Subagents:** Native parallel subagent orchestration (OpenRouter free models only)
 - **Compose Mode:** Spec-driven development with Fable 5 plan as spec
 - **Goal/Stop:** /goal command for autonomous completion verification
 - **Dream/Distill:** Self-improvement from session traces

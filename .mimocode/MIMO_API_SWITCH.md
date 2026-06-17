@@ -1,30 +1,50 @@
-# Switch to Xiaomi MiMo Direct API
+# SCMessenger MiMo Code provider setup
 
-## Problem
-Current mimocode session uses OpenRouter (`https://openrouter.ai/api`) as the API backend.
-All agents spawned by this session inherit OpenRouter — they do NOT use the MiMo direct endpoint.
+## Current required backend
 
-## Solution
-Restart mimocode with these environment variables:
+SCMessenger_Clean should run MiMo Code through the same OpenRouter backend and model used by the working Claude Code connection. Claude Code uses the Anthropic-compatible OpenRouter endpoint (`https://openrouter.ai/api`); MiMo Code uses the OpenAI-compatible adapter, so its provider URL must be the OpenRouter OpenAI-compatible endpoint (`https://openrouter.ai/api/v1`).
+
+Required environment:
 
 ```bash
-export ANTHROPIC_BASE_URL="https://token-plan-sgp.xiaomimimo.com/v1"
-export ANTHROPIC_AUTH_TOKEN="tp-scvxitmsxobro7uaiw2u6k5zlfwup90xamhb4nh29dwwxro7"
-export OPENROUTER_API_KEY="tp-scvxitmsxobro7uaiw2u6k5zlfwup90xamhb4nh29dwwxro7"
+export OPENROUTER_API_KEY="<your OpenRouter key>"
+export ANTHROPIC_BASE_URL="https://openrouter.ai/api"
+export ANTHROPIC_AUTH_TOKEN="<same OpenRouter key>"
 unset ANTHROPIC_API_KEY
 ```
 
-Then relaunch mimocode. All agents will route through `token-plan-sgp.xiaomimimo.com` instead of OpenRouter.
+Default agent model for this workspace:
 
-## Available Models
-- `mimo-v2.5-pro` (primary — 4.1B credits)
-- `mimo-v2.5`
-- `mimo-v2-pro`
-- `mimo-v2-omni`
+```bash
+openrouter/nex-agi/nex-n2-pro:free
+```
+
+This is the free/ultra-low-cost completion backend ported from Claude Code to MiMo Code for SCMessenger swarm/agentic work.
+
+## Deprecated provider cleanup
+
+MiMo Code should have no Xiaomi MiMo provider, Xiaomi endpoint, or Xiaomi credential configured. The only connector is OpenRouter.
 
 ## Verification
-After restart, confirm with:
+
+After launching MiMo Code from `SCMessenger_Clean`, confirm the resolved config:
+
 ```bash
-env | grep ANTHROPIC_BASE_URL
-# Should show: https://token-plan-sgp.xiaomimimo.com/v1
+mimo debug config
+mimo providers list
+mimo models openrouter
+```
+
+Expected:
+
+- `provider.openrouter.api` resolves to `https://openrouter.ai/api/v1` for MiMo Code's OpenAI-compatible adapter
+- `provider.openrouter.options.headers.Authorization` resolves to `Bearer $OPENROUTER_API_KEY`
+- `OPENROUTER_API_KEY` is present
+- `openrouter/nex-agi/nex-n2-pro:free` is available
+- `ANTHROPIC_API_KEY` is not set
+
+Smoke test:
+
+```bash
+mimo run --agent build --model openrouter/nex-agi/nex-n2-pro:free 'Reply with one line: MiMo OpenRouter smoke test OK.'
 ```

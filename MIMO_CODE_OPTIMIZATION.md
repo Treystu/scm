@@ -6,32 +6,40 @@ MiMo Code provides several features beyond Claude Code that can significantly ac
 
 ## 1. Model Strategy (Cost Optimization)
 
-### MiMo Auto (Free Tier)
-- **Use for:** Routine tasks, linting, docs, test writing, code exploration
-- **Context:** 1M tokens — can hold the entire core crate in context
+**Primary orchestrator, planner, verifier, and implementer:** Kimi (this session / Moderato subscription). Kimi owns architecture decisions, task decomposition, final review, security-critical paths, and all user communication.
+
+OpenRouter free-tier models are used only as **augmentation for easy/mechanical sub-tasks** delegated through MiMo Code, to stretch Kimi budget further. Paid OpenRouter models (`openrouter/fusion`, `claude-opus-4.8`) are configured but **not used unless explicitly authorized**.
+
+### Kimi (Primary)
+- **Use for:** Planning, architecture, verification, final review, security/crypto decisions, complex debugging, orchestration
+- **When:** Default for all non-trivial work
+- **Best for:** Everything that requires reliable reasoning and full repo context
+
+### OpenRouter Free Tier (via MiMo Code)
+- **Use for:** Mechanical sub-tasks only — lint fixes, doc generation, simple refactors, test boilerplate, file listing, grep-heavy analysis
 - **Cost:** $0
-- **Best for:** Track 5 tasks (CI/hygiene), T5.3 (rustfmt/clippy), T5.8 (docs)
+- **Best for:** Easy tasks where verification is cheap and errors are recoverable
 
-### MiMo V2.5 Pro (via OpenRouter)
-- **Use for:** Complex architecture, multi-file refactors, FFI changes
+### MiMo Auto / OpenRouter Free Router (Free Tier)
+- **Use for:** Routine exploration, long-context scans, low-risk mechanical tasks
 - **Context:** 1M tokens
-- **Best for:** Track 1 (transport), Track 2 (DTN), Track 3 (routing)
+- **Cost:** $0
+- **Best for:** Track 5 hygiene tasks, large-file exploration
 
-### Claude Opus 4.8 (via OpenRouter)
-- **Use for:** Critical architecture decisions, security review, complex debugging
-- **When:** Only when MiMo V2.5 Pro struggles with a task
-- **Best for:** T4.2 (crypto verification), T3.2 (routing cost function)
+### Paid fallbacks (configured but disabled by policy)
+- `openrouter/openrouter/fusion` — multi-model deliberation, ~$0.02–0.10+ per request
+- `openrouter/anthropic/claude-opus-4.8` — critical architecture/security, only with explicit user approval
 
 ### Model Switching
 ```bash
-# Start with free model for exploration
+# Default for easy mechanical sub-tasks
+mimo --model openrouter/nex-agi/nex-n2-pro:free
+
+# Free router — OpenRouter picks the best free model
+mimo --model openrouter/openrouter/free
+
+# Long-context free exploration
 mimo --model mimo/mimo-auto
-
-# Switch to pro for implementation
-mimo --model openrouter/xiaomi/mimo-v2.5-pro
-
-# Critical tasks
-mimo --model openrouter/anthropic/claude-opus-4.8
 ```
 
 ## 2. Compose Mode (Spec-Driven Development)
@@ -128,12 +136,12 @@ MiMo Code's native subagent system replaces the external orchestrator_manager.sh
 ### Agent Types for SCMessenger
 | Agent | Model | Use Case |
 |-------|-------|----------|
-| build | mimo-v2.5-pro | Default implementation |
-| plan | mimo-v2.5-pro | Read-only analysis |
-| compose | mimo-v2.5-pro | Spec-driven development |
-| rust-coder | mimo-v2.5-pro | Rust core changes |
-| mobile-dev | mimo-v2.5-pro | Android/iOS changes |
-| reviewer | mimo-v2.5-pro | Code review |
+| build | openrouter/nex-agi/nex-n2-pro:free | Default implementation |
+| plan | openrouter/openai/gpt-oss-20b:free | Read-only analysis |
+| compose | openrouter/nex-agi/nex-n2-pro:free | Spec-driven development |
+| rust-coder | openrouter/nex-agi/nex-n2-pro:free | Rust core changes |
+| mobile-dev | openrouter/nex-agi/nex-n2-pro:free | Android/iOS changes |
+| reviewer | openrouter/openai/gpt-oss-20b:free | Code review |
 
 ### Max Concurrency
 - Default: 3 subagents
@@ -241,7 +249,8 @@ rm -rf /Users/scmessenger/Documents/Github/SCMessenger_Clean
 |---------|---------|
 | `mimo` | Start TUI in project directory |
 | `mimo run "/fable5 T5.1"` | Execute specific task |
-| `mimo --model mimo/mimo-auto` | Use free model |
+| `mimo --model openrouter/nex-agi/nex-n2-pro:free` | Use SCMessenger default OpenRouter model |
+| `mimo --model mimo/mimo-auto` | Use free MiMo Auto model |
 | `mimo --continue` | Resume last session |
 | `/goal <condition>` | Set autonomous stop condition |
 | `/dream` | Extract knowledge from session |
