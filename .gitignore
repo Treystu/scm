@@ -25,6 +25,7 @@ logs/*
 *_log.txt
 *_logs.txt
 *.txt
+!scripts/ffi-snapshots/*.txt
 
 # Temporary migration/debug inventories
 docs/_ios_*
