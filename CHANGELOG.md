@@ -2,7 +2,19 @@
 
 All notable changes to SCMessenger will be documented in this file.
 
-## [0.3.4] — Current
+## [1.0.0-rc1] — 2026-06-17
+
+Release candidate completing the Fable 5 plan. All core subsystems implemented,
+Rust gatekeeper suite passes, and Android/iOS/WASM builds are verified.
+
+### Verification
+
+- `cargo test --workspace --all-features` — passed
+- `cargo fmt --check`, `cargo clippy --workspace --all-features -- -D warnings`, `cargo deny check` — passed
+- `scripts/ffi_surface.sh` (Kotlin + Swift snapshots) — passed
+- Android debug APK (`./gradlew :app:assembleDebug`) — succeeded
+- iOS Simulator build (`xcodebuild -project SCMessenger.xcodeproj -scheme SCMessenger -destination 'generic/platform=iOS Simulator' build`) — succeeded
+- WASM build (`cargo build --target wasm32-unknown-unknown -p scmessenger-wasm`) — succeeded
 
 ### Subsystems
 
