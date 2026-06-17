@@ -71,14 +71,6 @@ enum TransportType: String, CaseIterable {
     }
 }
 
-/// Message delivery status
-enum MessageStatus: String, Codable {
-    case queued
-    case inCustody
-    case sent
-    case delivered
-}
-
 /// App-level settings (separate from MeshSettings)
 struct AppSettings {
     var hasCompletedOnboarding: Bool = false

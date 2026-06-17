@@ -26,6 +26,14 @@ echo "Generating Swift bindings..."
 
 cargo run --bin gen_swift --features gen-bindings
 
+# Stage generated Swift bindings where the Xcode project expects them
+SWIFT_GEN_DIR="$ROOT_DIR/core/target/generated-sources/uniffi/swift"
+IOS_GEN_DIR="$ROOT_DIR/ios/SCMessenger/SCMessenger/Generated"
+mkdir -p "$IOS_GEN_DIR"
+cp "$SWIFT_GEN_DIR/SCMessengerCore.swift" "$IOS_GEN_DIR/api.swift"
+cp "$SWIFT_GEN_DIR/scmessenger_core.h" "$IOS_GEN_DIR/apiFFI.h"
+cp "$SWIFT_GEN_DIR/scmessenger_core.modulemap" "$IOS_GEN_DIR/apiFFI.modulemap"
+
 echo "Creating xcframework..."
 
 rm -rf "$OUTPUT"

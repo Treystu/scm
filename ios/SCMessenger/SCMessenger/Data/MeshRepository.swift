@@ -637,7 +637,6 @@ final class MeshRepository {
                     }
                 }
 
-                meshService?.setBootstrapNodes(addrs: bootstrapAddrs)
                 // P0_TRANSPORT_001: Use static port 9001 for LAN connectivity with CLI daemon.
                 // This ensures both sides can dial each other using predictable addresses.
                 try? meshService?.startSwarm(listenAddr: "/ip4/0.0.0.0/tcp/9001", bootstrapAddrs: [])
@@ -795,7 +794,6 @@ final class MeshRepository {
         if settings?.internetEnabled == true {
             do {
                 // Configure bootstrap nodes for NAT traversal
-                meshService?.setBootstrapNodes(addrs: Self.defaultBootstrapNodes)
                 // P0_TRANSPORT_001: Use static port 9001 for LAN connectivity with CLI daemon.
                 try meshService?.startSwarm(listenAddr: "/ip4/0.0.0.0/tcp/9001", bootstrapAddrs: [])
                 broadcastIdentityBeacon()
@@ -902,7 +900,8 @@ final class MeshRepository {
             return false
         }
         do {
-            try ironCore.importIdentityBackup(backup: backupPayload)
+            // TODO: Use a user-provided or keychain-derived passphrase instead of a placeholder.
+            try ironCore.importIdentityBackup(backup: backupPayload, passphrase: "SCMessenger-Backup-Placeholder")
             logVerbose("Restored identity from iOS Keychain backup payload")
             return true
         } catch {
@@ -914,7 +913,8 @@ final class MeshRepository {
     private func persistIdentityBackupToKeychain(ironCore: IronCore?) {
         guard let ironCore else { return }
         do {
-            let backup = try ironCore.exportIdentityBackup()
+            // TODO: Use a user-provided or keychain-derived passphrase instead of a placeholder.
+            let backup = try ironCore.exportIdentityBackup(passphrase: "SCMessenger-Backup-Placeholder")
             writeIdentityBackupToKeychain(backup)
         } catch {
             logger.warning("Failed to persist identity backup payload: \(error.localizedDescription, privacy: .public)")
@@ -1078,7 +1078,12 @@ final class MeshRepository {
 
         // Prepare and send message (use trimmed key to handle any stored whitespace)
         let outboundContent = encodeMessageWithIdentityHints(content)
-        let prepared = try ironCore.prepareMessageWithId(recipientPublicKeyHex: trimmedKey, text: outboundContent)
+        let prepared = try ironCore.prepareMessageWithId(
+            recipientPublicKeyHex: trimmedKey,
+            text: outboundContent,
+            msgType: .text,
+            ttl: nil
+        )
         let messageId = prepared.messageId.trimmingCharacters(in: .whitespacesAndNewlines)
         if messageId.isEmpty {
             throw MeshError.notInitialized("Core returned empty message ID")
@@ -1094,6 +1099,7 @@ final class MeshRepository {
             timestamp: UInt64(Date().timeIntervalSince1970),
             senderTimestamp: UInt64(Date().timeIntervalSince1970),
             delivered: false,
+            status: .queued,
             hidden: false
         )
         try? historyManager?.add(record: messageRecord)
@@ -1280,7 +1286,9 @@ final class MeshRepository {
                     addedAt: UInt64(Date().timeIntervalSince1970),
                     lastSeen: UInt64(Date().timeIntervalSince1970),
                     notes: routeNotes,
-                    lastKnownDeviceId: verifiedHints?.deviceId
+                    lastKnownDeviceId: verifiedHints?.deviceId,
+                    verifiedAt: nil,
+                    isTombstone: false
                 )
                 do {
                     try contactManager?.add(contact: autoContact)
@@ -1336,7 +1344,9 @@ final class MeshRepository {
                     addedAt: existingContact.addedAt,
                     lastSeen: existingContact.lastSeen,
                     notes: updatedNotes,
-                    lastKnownDeviceId: verifiedHints?.deviceId ?? existingContact.lastKnownDeviceId
+                    lastKnownDeviceId: verifiedHints?.deviceId ?? existingContact.lastKnownDeviceId,
+                    verifiedAt: existingContact.verifiedAt,
+                    isTombstone: existingContact.isTombstone
                 )
                 try? contactManager?.add(contact: updatedContact)
                 contactManager?.flush()
@@ -1445,6 +1455,7 @@ final class MeshRepository {
                         timestamp: UInt64(obj["ts"] as? Int64 ?? 0),
                         senderTimestamp: UInt64(obj["sts"] as? Int64 ?? 0),
                         delivered: obj["del"] as? Bool ?? false,
+                        status: obj["del"] as? Bool ?? false ? .delivered : .queued,
                         hidden: false
                     )
                     try? historyManager?.add(record: record)
@@ -1500,6 +1511,7 @@ final class MeshRepository {
             timestamp: canonicalTimestamp,
             senderTimestamp: senderTimestamp,
             delivered: true,
+            status: .delivered,
             hidden: false
         )
 
@@ -1700,7 +1712,9 @@ final class MeshRepository {
                 let payload = encodeIdentitySyncPayload()
                 let prepared = try ironCore?.prepareMessageWithId(
                     recipientPublicKeyHex: recipientPublicKey,
-                    text: payload
+                    text: payload,
+                    msgType: .text,
+                    ttl: nil
                 )
                 guard let prepared = prepared else {
                     identitySyncSentPeers.remove(normalizedRoute)
@@ -1763,7 +1777,12 @@ final class MeshRepository {
 
             do {
                 let payload = encodeMeshMessagePayload(content: "", kind: "history_sync")
-                guard let prepared = try? ironCore?.prepareMessageWithId(recipientPublicKeyHex: recipientPublicKey, text: payload) else {
+                guard let prepared = try? ironCore?.prepareMessageWithId(
+                    recipientPublicKeyHex: recipientPublicKey,
+                    text: payload,
+                    msgType: .text,
+                    ttl: nil
+                ) else {
                     historySyncSentPeers.removeValue(forKey: normalizedRoute)
                     logDiagnostic("history_sync_request_failed_prepare route=\(normalizedRoute)")
                     logger.error("historySync request failed to prepare message")
@@ -1845,7 +1864,12 @@ final class MeshRepository {
                     }
 
                     let payload = encodeMeshMessagePayload(content: jsonStr, kind: "history_sync_data")
-                    guard let prepared = try? ironCore?.prepareMessageWithId(recipientPublicKeyHex: recipientPublicKey, text: payload) else {
+                    guard let prepared = try? ironCore?.prepareMessageWithId(
+                        recipientPublicKeyHex: recipientPublicKey,
+                        text: payload,
+                        msgType: .text,
+                        ttl: nil
+                    ) else {
                         self.logger.error("sendHistorySyncData prepareMessageWithId failed for batch \(batchIndex) (\(batch.count) msgs)")
                         continue
                     }
@@ -2452,7 +2476,9 @@ final class MeshRepository {
             addedAt: existingContact.addedAt,
             lastSeen: existingContact.lastSeen,
             notes: removeRoutingHint(notes: existingContact.notes, key: NotificationNoteKey.requestPending),
-            lastKnownDeviceId: existingContact.lastKnownDeviceId
+            lastKnownDeviceId: existingContact.lastKnownDeviceId,
+            verifiedAt: existingContact.verifiedAt,
+            isTombstone: existingContact.isTombstone
         )
         try? contactManager?.add(contact: updated)
         contactManager?.flush()
@@ -2668,8 +2694,8 @@ final class MeshRepository {
     }
 
     func exportDiagnosticsAsync() async -> String {
-        return await Task.detached(priority: .utility) {
-            self.exportDiagnosticsInternal()
+        return await Task.detached(priority: .utility) { [weak self] in
+            await self?.exportDiagnosticsInternal() ?? ""
         }.value
     }
 
@@ -2775,9 +2801,13 @@ final class MeshRepository {
 
         // UNIFIED ID FIX: Canonicalize peerId to public_key_hex before storage.
         let canonicalPeerId: String
-        if let resolved = ironCore?.resolveIdentity(anyId: contact.peerId) {
-            canonicalPeerId = resolved
-        } else {
+        do {
+            if let resolved = try ironCore?.resolveIdentity(anyId: contact.peerId) {
+                canonicalPeerId = resolved
+            } else {
+                canonicalPeerId = contact.peerId
+            }
+        } catch {
             canonicalPeerId = contact.peerId
         }
 
@@ -2791,7 +2821,9 @@ final class MeshRepository {
                 addedAt: contact.addedAt,
                 lastSeen: contact.lastSeen,
                 notes: contact.notes,
-                lastKnownDeviceId: contact.lastKnownDeviceId
+                lastKnownDeviceId: contact.lastKnownDeviceId,
+                verifiedAt: contact.verifiedAt,
+                isTombstone: contact.isTombstone
             )
         } else {
             finalContact = contact
@@ -2975,7 +3007,7 @@ final class MeshRepository {
         guard let ironCore = ironCore else {
             throw MeshError.notInitialized("IronCore not initialized")
         }
-        try ironCore.blockPeer(peerId: peerId, reason: reason)
+        try ironCore.blockPeer(peerId: peerId, deviceId: nil, reason: reason)
         logger.info("✓ Blocked peer: \(peerId)")
     }
 
@@ -2984,7 +3016,7 @@ final class MeshRepository {
         guard let ironCore = ironCore else {
             throw MeshError.notInitialized("IronCore not initialized")
         }
-        try ironCore.unblockPeer(peerId: peerId)
+        try ironCore.unblockPeer(peerId: peerId, deviceId: nil)
         logger.info("✓ Unblocked peer: \(peerId)")
     }
 
@@ -2994,7 +3026,7 @@ final class MeshRepository {
         guard let ironCore = ironCore else {
             throw MeshError.notInitialized("IronCore not initialized")
         }
-        try ironCore.blockAndDeletePeer(peerId: peerId, reason: reason)
+        try ironCore.blockAndDeletePeer(peerId: peerId, deviceId: nil, reason: reason)
         logger.info("✓ Blocked and deleted peer: \(peerId)")
     }
 
@@ -3003,7 +3035,7 @@ final class MeshRepository {
         guard let ironCore = ironCore else {
             throw MeshError.notInitialized("IronCore not initialized")
         }
-        return try ironCore.isPeerBlocked(peerId: peerId)
+        return try ironCore.isPeerBlocked(peerId: peerId, deviceId: nil)
     }
 
     /// List all blocked peers.
@@ -3139,6 +3171,8 @@ final class MeshRepository {
 
         // 1. Report to Rust MeshService
         let profile = DeviceProfile(
+            peerId: nil,
+            deviceId: nil,
             batteryPct: pct,
             isCharging: charging,
             hasWifi: networkStatus.wifi,
@@ -3156,6 +3190,8 @@ final class MeshRepository {
 
         // Report to Rust
         let profile = DeviceProfile(
+            peerId: nil,
+            deviceId: nil,
             batteryPct: currentBatteryPct,
             isCharging: currentIsCharging,
             hasWifi: wifi,
@@ -3180,6 +3216,8 @@ final class MeshRepository {
 
         // Report to Rust
         let profile = DeviceProfile(
+            peerId: nil,
+            deviceId: nil,
             batteryPct: currentBatteryPct,
             isCharging: currentIsCharging,
             hasWifi: networkStatus.wifi,
@@ -3675,7 +3713,9 @@ final class MeshRepository {
                     addedAt: contact.addedAt,
                     lastSeen: UInt64(Date().timeIntervalSince1970),
                     notes: updatedNotes,
-                    lastKnownDeviceId: contact.lastKnownDeviceId
+                    lastKnownDeviceId: contact.lastKnownDeviceId,
+                    verifiedAt: contact.verifiedAt,
+                    isTombstone: contact.isTombstone
                 )
                 try? contactManager?.add(contact: updatedContact)
                 contactManager?.flush()
@@ -5393,7 +5433,9 @@ final class MeshRepository {
                 addedAt: contact.addedAt,
                 lastSeen: contact.lastSeen,
                 notes: withListeners,
-                lastKnownDeviceId: contact.lastKnownDeviceId
+                lastKnownDeviceId: contact.lastKnownDeviceId,
+                verifiedAt: contact.verifiedAt,
+                isTombstone: contact.isTombstone
             )
             try? contactManager?.add(contact: updated)
             contactManager?.flush()
@@ -5463,7 +5505,9 @@ final class MeshRepository {
             addedAt: existing?.addedAt ?? now,
             lastSeen: now,
             notes: notes,
-            lastKnownDeviceId: deviceId ?? existing?.lastKnownDeviceId
+            lastKnownDeviceId: deviceId ?? existing?.lastKnownDeviceId,
+            verifiedAt: existing?.verifiedAt,
+            isTombstone: existing?.isTombstone ?? false
         )
         try? contactManager?.add(contact: updated)
         contactManager?.flush()
@@ -5663,6 +5707,8 @@ final class MeshRepository {
         }
 
         let profile = DeviceProfile(
+            peerId: nil,
+            deviceId: nil,
             batteryPct: currentBatteryPct,
             isCharging: currentIsCharging,
             hasWifi: networkStatus.wifi,
@@ -6212,7 +6258,9 @@ final class MeshRepository {
                             addedAt: contact.addedAt,
                             lastSeen: contact.lastSeen,
                             notes: contact.notes,
-                            lastKnownDeviceId: contact.lastKnownDeviceId
+                            lastKnownDeviceId: contact.lastKnownDeviceId,
+                            verifiedAt: contact.verifiedAt,
+                            isTombstone: contact.isTombstone
                          )
                          try contactManager.add(contact: newContact)
                     }
@@ -6234,6 +6282,7 @@ final class MeshRepository {
                         timestamp: msg.timestamp,
                         senderTimestamp: msg.senderTimestamp,
                         delivered: msg.delivered,
+                        status: msg.status,
                         hidden: msg.hidden
                     )
                     try historyManager.add(record: updatedMsg)

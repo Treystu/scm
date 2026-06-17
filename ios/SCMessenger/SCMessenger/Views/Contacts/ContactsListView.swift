@@ -222,7 +222,9 @@ struct ContactsListView: View {
             addedAt: UInt64(Date().timeIntervalSince1970),
             lastSeen: nil,
             notes: notesParts.isEmpty ? nil : notesParts.joined(separator: ";"),
-            lastKnownDeviceId: nil
+            lastKnownDeviceId: nil,
+            verifiedAt: nil,
+            isTombstone: false
         )
 
         do {
@@ -492,10 +494,14 @@ struct AddContactView: View {
         // UNIFIED ID FIX: Canonicalize peerId to public_key_hex before storage.
         // resolveIdentity handles all input formats (libp2p_peer_id, identity_id, public_key_hex).
         let canonicalPeerId: String
-        if let resolved = repository.ironCore?.resolveIdentity(anyId: finalPeerId) {
-            canonicalPeerId = resolved
-        } else {
-            // Fallback: publicKey is already validated as canonical hex
+        do {
+            if let resolved = try repository.ironCore?.resolveIdentity(anyId: finalPeerId) {
+                canonicalPeerId = resolved
+            } else {
+                // Fallback: publicKey is already validated as canonical hex
+                canonicalPeerId = finalPublicKey
+            }
+        } catch {
             canonicalPeerId = finalPublicKey
         }
 
@@ -507,7 +513,9 @@ struct AddContactView: View {
             addedAt: UInt64(Date().timeIntervalSince1970),
             lastSeen: nil,
             notes: notesValue,
-            lastKnownDeviceId: nil
+            lastKnownDeviceId: nil,
+            verifiedAt: nil,
+            isTombstone: false
         )
 
         do {

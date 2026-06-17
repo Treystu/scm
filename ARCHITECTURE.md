@@ -173,6 +173,10 @@ SCMessenger is organized as a Cargo workspace with platform-specific apps. The c
 | `NetworkDetector.kt` | Network state detection |
 | `SubnetProbe.kt` | Subnet peer probing |
 
+## Testing
+
+See [`docs/device-testing.md`](docs/device-testing.md) for the physical-device test procedures used to validate BLE, Wi-Fi Aware, Wi-Fi Direct, Apple Multipeer, and DTN sneakernet scenarios.
+
 ## Deferred
 
 - **Acoustic transport** — planned for post-v1.0.0

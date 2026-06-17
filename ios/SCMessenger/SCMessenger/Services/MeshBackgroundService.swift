@@ -8,7 +8,6 @@
 
 import BackgroundTasks
 import os
-import SCMessengerCore
 
 /// Manages all iOS background execution strategies
 /// iOS equivalent of Android's MeshForegroundService
@@ -198,7 +197,7 @@ final class MeshBackgroundService {
                 try await self.meshRepository.updatePeerLedger()
 
                 // Run Rust core maintenance cycle (25s budget)
-                let report = SCMessengerCore.runMaintenanceCycle(budgetMs: 25000)
+                let report = self.meshRepository.ironCore?.runMaintenanceCycle(budgetMs: 25000) ?? "no core"
                 self.logger.info("Maintenance cycle: \(report)")
 
                 task.setTaskCompleted(success: true)

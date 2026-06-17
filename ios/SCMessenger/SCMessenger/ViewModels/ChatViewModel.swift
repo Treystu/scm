@@ -56,6 +56,7 @@ final class ChatViewModel {
             timestamp: now,
             senderTimestamp: now,
             delivered: false,
+            status: .queued,
             hidden: false
         )
         messages.append(optimisticMessage)
@@ -90,7 +91,9 @@ final class ChatViewModel {
                     self.error = "Blocked: \(message)"
                 case .AlreadyRunning(let message):
                     self.error = "Already Running: \(message)"
-                @unknown default:
+                case .ConsentRequired(let message):
+                    self.error = "Consent Required: \(message)"
+                default:
                     self.error = "Unknown IronCore Error"
                 }
                 self.loadMessages()

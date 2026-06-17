@@ -52,7 +52,8 @@ android/app/src/main/jniLibs/
 # UniFFI Generated
 core/target/generated-sources/
 core/target/android-libs/
-iOS/SCMessenger/SCMessenger/Generated/
+# NOTE: iOS Generated files are tracked because Xcode references them as source files.
+# iOS/SCMessenger/SCMessenger/Generated/
 *.a
 
 core/iOS/
