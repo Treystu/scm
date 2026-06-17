@@ -66,12 +66,14 @@ pub trait WifiDirectPlatformBridge: Send + Sync {
     fn set_on_message_received(&self, callback: Box<dyn Fn(String, Vec<u8>) + Send + Sync>);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub struct PlatformWifiDirectBridge {
     platform_bridge: std::sync::Arc<parking_lot::Mutex<Option<Box<dyn crate::PlatformBridge>>>>,
     discovered_peers: Arc<parking_lot::Mutex<HashMap<String, WifiDirectPeer>>>,
     group_info: Arc<parking_lot::Mutex<Option<GroupInfo>>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl PlatformWifiDirectBridge {
     pub fn new_platform_ref(
         platform_bridge: std::sync::Arc<parking_lot::Mutex<Option<Box<dyn crate::PlatformBridge>>>>,
@@ -108,6 +110,7 @@ impl PlatformWifiDirectBridge {
 }
 
 #[async_trait]
+#[cfg(not(target_arch = "wasm32"))]
 impl WifiDirectPlatformBridge for PlatformWifiDirectBridge {
     async fn is_available(&self) -> Result<bool, WifiDirectError> {
         Ok(self.with_platform(|_| true).unwrap_or(false))

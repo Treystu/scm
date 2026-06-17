@@ -303,6 +303,7 @@ impl EscalationEngine {
 
     /// Get the recommended transport for a peer based on current state and policy.
     /// Returns None if the peer is not tracked.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn recommended_transport(&self, peer_id: &[u8; 32]) -> Option<crate::ProximityTransport> {
         let states = self.states.read();
         states.get(peer_id).map(|state| {
