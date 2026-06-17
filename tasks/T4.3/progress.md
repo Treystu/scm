@@ -1,6 +1,6 @@
 # T4.3 — Anti-entropy for contact/block state (CRDT reconciliation of social graph across own devices)
 
-**Status:** pending
+**Status:** completed
 **Track:** 4 (Cryptographic Identity, Anti-Entropy & UI Hardening)
 **Dependencies:** T2.3
 **Blocks:** none
@@ -21,5 +21,5 @@
 - Encrypted with own-identity keys (self-addressed envelopes already encrypt to recipient = self)
 
 ## Verification
-- [ ] Unit tests: concurrent block+unblock -> blocked; add+remove -> tombstone wins per LWW
-- [ ] Integration: two IronCore instances same identity, partitioned edits, drift-merge -> identical contact/block sets (extend `integration_contact_block.rs`)
+- [x] Unit tests: concurrent block+unblock -> blocked; add+remove -> tombstone wins per LWW
+- [x] Integration: two IronCore instances same identity, partitioned edits, drift-merge -> identical contact/block sets (extend `integration_contact_block.rs`)

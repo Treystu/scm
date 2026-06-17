@@ -1,6 +1,6 @@
 # T3.1 — Promote phase2_apis into default build
 
-**Status:** pending
+**Status:** completed
 **Track:** 3 (Mycorrhizal Routing & Hardware-Aware Heuristics)
 **Dependencies:** T5.4
 **Blocks:** T3.2, T3.3
@@ -19,6 +19,6 @@
 - Multipath duplicate-send interacts with T2.5 ownership rule — multipath counts as ONE owner (the live path) with internal redundancy
 
 ## Verification
-- [ ] `cargo test --workspace --all-features` and `cargo build --target wasm32-unknown-unknown` both green
-- [ ] `grep -rn "phase2_apis" core/` only in CHANGELOG
-- [ ] One authoritative routing-reputation source asserted in ARCHITECTURE.md
+- [x] `cargo test --workspace --all-features` and `cargo build --target wasm32-unknown-unknown` both green
+- [x] `grep -rn "phase2_apis" core/` only in CHANGELOG
+- [x] One authoritative routing-reputation source asserted in ARCHITECTURE.md

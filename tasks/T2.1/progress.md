@@ -1,6 +1,6 @@
 # T2.1 — Complete the SwarmCommand async-command seam (G5)
 
-**Status:** pending
+**Status:** completed
 **Track:** 2 (Asynchronous Storage & Delay-Tolerant Networking)
 **Dependencies:** T5.4
 **Blocks:** T2.2
@@ -19,6 +19,6 @@
 - WASM target excludes this path (`#[cfg(not(target_arch = "wasm32"))]` already present)
 
 ## Verification
-- [ ] `grep -n "TODO" core/src/iron_core.rs` empty
-- [ ] New integration test: start swarm, issue `update_keepalive`, observe keepalive change via swarm event inspection
-- [ ] The 7 `#[ignore]`d NAT tests in `transport/nat.rs:634-699` get a live-SwarmHandle harness and are un-ignored (or moved to the CI `--ignored` network job from T5.4 with the harness)
+- [x] `grep -n "TODO" core/src/iron_core.rs` empty
+- [x] New integration test: start swarm, issue `update_keepalive`, observe keepalive change via swarm event inspection
+- [x] The 7 `#[ignore]`d NAT tests in `transport/nat.rs:634-699` get a live-SwarmHandle harness and are un-ignored (or moved to the CI `--ignored` network job from T5.4 with the harness)

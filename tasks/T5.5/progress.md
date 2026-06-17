@@ -1,6 +1,6 @@
 # T5.5 — CI workflow: cross-compilation matrix (Android/iOS/WASM)
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.4
 **Blocks:** T5.6, T5.7
@@ -21,6 +21,6 @@
 - QUIC (quinn) needs no extra system deps; sled needs none
 
 ## Verification
-- [ ] All targets compile
-- [ ] Artifacts contain `libscmessenger_mobile.so` for 3 ABIs, `.dylib`/iOS staticlib, `api.kt`, `SCMessengerCore.swift`
-- [ ] Generated Kotlin contains `@file:android.annotation.SuppressLint("NewApi")` header (post-processing ran)
+- [x] All targets compile
+- [x] Artifacts contain `libscmessenger_mobile.so` for 3 ABIs, `.dylib`/iOS staticlib, `api.kt`, `SCMessengerCore.swift`
+- [x] Generated Kotlin contains `@file:android.annotation.SuppressLint("NewApi")` header (post-processing ran)

@@ -1,6 +1,6 @@
 # T1.5 — BLE L2CAP throughput & fragmentation hardening
 
-**Status:** pending
+**Status:** completed
 **Track:** 1 (Native Hardware & Proximity Transport Layer)
 **Dependencies:** T5.4
 **Blocks:** none
@@ -20,5 +20,5 @@
 - Peripheral-role L2CAP listen on Android requires API 29+ — Kotlin must gate with `Build.VERSION` and fall back to GATT characteristic writes (the `gatt.rs` path) below that
 
 ## Verification
-- [ ] `proptest` in `core/src/transport/ble/`: 10k randomized fragment streams, zero panics, corrupt frames always rejected (CRC)
-- [ ] Memory cap test: oversized partial stream evicted with logged DropReason
+- [x] `proptest` in `core/src/transport/ble/`: 10k randomized fragment streams, zero panics, corrupt frames always rejected (CRC)
+- [x] Memory cap test: oversized partial stream evicted with logged DropReason

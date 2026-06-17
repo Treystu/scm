@@ -1,6 +1,6 @@
 # T4.2 — Out-of-band identity verification (safety numbers + QR)
 
-**Status:** pending
+**Status:** completed
 **Track:** 4 (Cryptographic Identity, Anti-Entropy & UI Hardening)
 **Dependencies:** T5.7
 **Blocks:** none
@@ -22,7 +22,7 @@
 - Safety number must be order-independent (sorted keys) so both sides display identically
 
 ## Verification
-- [ ] Rust unit tests: same number both directions; differs on any key change
-- [ ] QR payload round-trip + signature verify + reject-tampered
-- [ ] UDL snapshot updated
-- [ ] Kotlin/Swift compile
+- [x] Rust unit tests: same number both directions; differs on any key change
+- [x] QR payload round-trip + signature verify + reject-tampered
+- [x] UDL snapshot updated
+- [x] Kotlin/Swift compile

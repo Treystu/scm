@@ -1,6 +1,6 @@
 # T4.1 — Ratchet session persistence audit & restart safety
 
-**Status:** pending
+**Status:** completed
 **Track:** 4 (Cryptographic Identity, Anti-Entropy & UI Hardening)
 **Dependencies:** T5.4
 **Blocks:** T4.5
@@ -19,5 +19,5 @@
 - Concurrent session mutation during flush (parking_lot guards exist — verify no deadlock with sled flush reentrance, `identity/store.rs` reopens-on-drop pattern is suspicious here)
 
 ## Verification
-- [ ] New `core/tests/integration_ratchet_persistence.rs` green
-- [ ] Proptest: random persist/restore points in a 200-message exchange never produce decrypt failure beyond the documented MAX_SKIP_KEYS window
+- [x] New `core/tests/integration_ratchet_persistence.rs` green
+- [x] Proptest: random persist/restore points in a 200-message exchange never produce decrypt failure beyond the documented MAX_SKIP_KEYS window

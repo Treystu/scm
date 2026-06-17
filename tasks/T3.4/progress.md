@@ -1,6 +1,6 @@
 # T3.4 — Routing telemetry for field debugging (zero-infrastructure observability)
 
-**Status:** pending
+**Status:** completed
 **Track:** 3 (Mycorrhizal Routing & Hardware-Aware Heuristics)
 **Dependencies:** T3.3
 **Blocks:** none
@@ -20,6 +20,6 @@
 - Bound report size (<256 KiB) for export-via-QR/file use
 
 ## Verification
-- [ ] Unit test: 300 decisions -> ring holds last 256
-- [ ] Report JSON schema-validated and size-bounded
-- [ ] Redaction asserted (no message_id+peer_id co-occurrence)
+- [x] Unit test: 300 decisions -> ring holds last 256
+- [x] Report JSON schema-validated and size-bounded
+- [x] Redaction asserted (no message_id+peer_id co-occurrence)

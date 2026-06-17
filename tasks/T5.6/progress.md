@@ -1,6 +1,6 @@
 # T5.6 — CI workflow: mobile app assembly
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.5
 **Blocks:** none
@@ -20,6 +20,6 @@
 - Do NOT commit the rebuilt xcframework (it's an artifact — extend T5.1 ignore rules)
 
 ## Verification
-- [ ] Debug APK artifact produced
-- [ ] xcodebuild exits 0
-- [ ] Both jobs consume freshly built (not committed) native libs
+- [x] Debug APK artifact produced
+- [x] xcodebuild exits 0
+- [x] Both jobs consume freshly built (not committed) native libs

@@ -1,6 +1,6 @@
 # T5.2 — Remove phantom `mobile` workspace member & fix portability of cargo config
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.1
 **Blocks:** T5.3
@@ -16,6 +16,6 @@
 4. Or move linker selection into `cargo-ndk` invocation documented in scripts
 
 ## Verification
-- [ ] `cargo metadata --format-version 1 > /dev/null` exits 0
-- [ ] `grep -r "kanal" core/.cargo/` empty
-- [ ] `cargo check --workspace` passes
+- [x] `cargo metadata --format-version 1 > /dev/null` exits 0
+- [x] `grep -r "kanal" core/.cargo/` empty
+- [x] `cargo check --workspace` passes

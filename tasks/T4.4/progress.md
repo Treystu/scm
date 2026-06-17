@@ -1,6 +1,6 @@
 # T4.4 — Zero-status UI hardening (honest state surfacing, no fake liveness)
 
-**Status:** pending
+**Status:** completed
 **Track:** 4 (Cryptographic Identity, Anti-Entropy & UI Hardening)
 **Dependencies:** T5.7
 **Blocks:** none
@@ -22,7 +22,7 @@
 - WASM/CLI parity for the enum
 
 ## Verification
-- [ ] Rust state-machine property test (no illegal transitions, monotone progress)
-- [ ] Receipt-forgery test: unsigned/wrong-key receipt does NOT flip status
-- [ ] FFI snapshot updated
-- [ ] Swift+Kotlin unit tests for render mapping (status -> glyph) committed alongside
+- [x] Rust state-machine property test (no illegal transitions, monotone progress)
+- [x] Receipt-forgery test: unsigned/wrong-key receipt does NOT flip status
+- [x] FFI snapshot updated
+- [x] Swift+Kotlin unit tests for render mapping (status -> glyph) committed alongside

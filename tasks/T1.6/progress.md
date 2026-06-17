@@ -1,6 +1,6 @@
 # T1.6 — iOS background BLE survival audit & hardening
 
-**Status:** pending
+**Status:** completed
 **Track:** 1 (Native Hardware & Proximity Transport Layer)
 **Dependencies:** T5.4
 **Blocks:** T2.4
@@ -20,6 +20,6 @@
 - DarkBLE rotating beacons (`beacon.rs` rotation_epoch) vs. iOS overflow-area advertising: confirm the encrypted beacon fits the 28-byte overflow payload — if not, move rotation material into the scan-response/GATT read
 
 ## Verification
-- [ ] XCTest for willRestoreState handling
-- [ ] Documented two-device procedure: message delivered while receiving iPhone is backgrounded >=10 min
-- [ ] Beacon payload size statically asserted <= legal advertisement length in a Rust test
+- [x] XCTest for willRestoreState handling
+- [x] Documented two-device procedure: message delivered while receiving iPhone is backgrounded >=10 min
+- [x] Beacon payload size statically asserted <= legal advertisement length in a Rust test

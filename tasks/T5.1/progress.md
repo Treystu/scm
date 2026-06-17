@@ -1,6 +1,6 @@
 # T5.1 — Purge committed build artifacts & fix .gitignore enforcement
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** none (first task)
 **Blocks:** T5.2, T5.8, T5.9
@@ -23,6 +23,6 @@
 - Document local-build prerequisite in README task (T5.8) if needed
 
 ## Verification
-- [ ] `git ls-files | grep -E '\.(so|dylib|apk)$'` returns empty
-- [ ] `du -sh .git` reported before/after
-- [ ] `cargo build -p scmessenger-core` still succeeds
+- [x] `git ls-files | grep -E '\.(so|dylib|apk)$'` returns empty
+- [x] `du -sh .git` reported before/after
+- [x] `cargo build -p scmessenger-core` still succeeds

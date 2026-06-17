@@ -1,6 +1,6 @@
 # T5.9 — Resolve duplicate PlatformBridge trait (G4)
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.1
 **Blocks:** none
@@ -19,5 +19,5 @@
 - `MeshService` in `mobile/service.rs` vs the UniFFI `MeshService` in `mobile_bridge.rs:153` are different types with the same name — ensure `lib.rs` re-exports stay unambiguous
 
 ## Verification
-- [ ] `cargo test --workspace` passes
-- [ ] `grep -rn "trait PlatformBridge" core/src` yields exactly one non-deprecated definition
+- [x] `cargo test --workspace` passes
+- [x] `grep -rn "trait PlatformBridge" core/src` yields exactly one non-deprecated definition

@@ -1,6 +1,6 @@
 # T2.3 — Custody persistence across process death (mule survives reboot)
 
-**Status:** pending
+**Status:** completed
 **Track:** 2 (Asynchronous Storage & Delay-Tolerant Networking)
 **Dependencies:** T2.2
 **Blocks:** T2.4, T2.5, T4.3
@@ -21,6 +21,6 @@
 - Android `MeshForegroundService` crash-handler stops the service — ensure flush-on-stop (sled flush in `MeshService.stop()`, `mobile_bridge.rs:310`)
 
 ## Verification
-- [ ] Extend `test_persistence_restart.rs`: queue 100 drift envelopes -> drop and reopen `IronCore` on same path -> all 100 present, expired ones swept
-- [ ] Eviction test at cap
-- [ ] `cargo test -p scmessenger-core persistence` green
+- [x] Extend `test_persistence_restart.rs`: queue 100 drift envelopes -> drop and reopen `IronCore` on same path -> all 100 present, expired ones swept
+- [x] Eviction test at cap
+- [x] `cargo test -p scmessenger-core persistence` green

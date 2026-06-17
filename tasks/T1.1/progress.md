@@ -1,6 +1,6 @@
 # T1.1 — Generalize the FFI proximity-data plane (G3)
 
-**Status:** pending
+**Status:** completed
 **Track:** 1 (Native Hardware & Proximity Transport Layer)
 **Dependencies:** T5.7
 **Blocks:** T1.2, T1.4, T1.7
@@ -21,7 +21,7 @@
 - Duplicate delivery when a peer is reachable over two transports — dedup already exists (`store/dedup.rs`), but verify message-id dedup fires before decrypt cost
 
 ## Verification
-- [ ] New Rust unit tests: oversize payload per transport rejected
-- [ ] Round-trip via a mock `PlatformBridge` for each enum variant
-- [ ] T5.7 snapshot updated in same change
-- [ ] Both binding generators succeed
+- [x] New Rust unit tests: oversize payload per transport rejected
+- [x] Round-trip via a mock `PlatformBridge` for each enum variant
+- [x] T5.7 snapshot updated in same change
+- [x] Both binding generators succeed

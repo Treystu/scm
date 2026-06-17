@@ -1,6 +1,6 @@
 # T5.7 — UniFFI surface contract test (FFI stability gate)
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.4, T5.5
 **Blocks:** T1.1, T4.2, T4.4
@@ -20,5 +20,5 @@
 - Two `PlatformBridge` traits exist (G4) — snapshot only the UniFFI one
 
 ## Verification
-- [ ] CI fails when an agent adds/removes/renames any exported fn/record/enum without updating the snapshot
-- [ ] Passes on no-op rebuild
+- [x] CI fails when an agent adds/removes/renames any exported fn/record/enum without updating the snapshot
+- [x] Passes on no-op rebuild

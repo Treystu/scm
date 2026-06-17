@@ -1,6 +1,6 @@
 # T4.5 — Key backup/recovery flow verification
 
-**Status:** pending
+**Status:** partial
 **Track:** 4 (Cryptographic Identity, Anti-Entropy & UI Hardening)
 **Dependencies:** T4.1
 **Blocks:** none

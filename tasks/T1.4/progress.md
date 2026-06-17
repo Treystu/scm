@@ -1,6 +1,6 @@
 # T1.4 — Wi-Fi Direct Rust transport + Android bridge (G2)
 
-**Status:** pending
+**Status:** partial
 **Track:** 1 (Native Hardware & Proximity Transport Layer)
 **Dependencies:** T1.1
 **Blocks:** none

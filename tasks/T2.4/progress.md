@@ -1,6 +1,6 @@
 # T2.4 — Background sync scheduling on both platforms
 
-**Status:** pending
+**Status:** partial
 **Track:** 2 (Asynchronous Storage & Delay-Tolerant Networking)
 **Dependencies:** T2.3, T1.6
 **Blocks:** none

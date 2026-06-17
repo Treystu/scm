@@ -1,6 +1,6 @@
 # T2.2 — Drift sync end-to-end verification under partition (prove the DTN claim)
 
-**Status:** pending
+**Status:** completed
 **Track:** 2 (Asynchronous Storage & Delay-Tolerant Networking)
 **Dependencies:** T2.1
 **Blocks:** T2.3
@@ -21,7 +21,7 @@
 - `SyncRateLimiter` (`drift/rate_limit.rs`) must not starve a short BLE contact window — verify a 10 s contact transfers >= N messages
 
 ## Verification
-- [ ] `cargo test --test integration_drift_mule` green
-- [ ] Test asserts: delivery, decryption, dedup count == 0 duplicates surfaced to history
-- [ ] Expired-message drop with reason
-- [ ] Sync completes within simulated 10 s contact
+- [x] `cargo test --test integration_drift_mule` green
+- [x] Test asserts: delivery, decryption, dedup count == 0 duplicates surfaced to history
+- [x] Expired-message drop with reason
+- [x] Sync completes within simulated 10 s contact

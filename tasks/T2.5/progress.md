@@ -1,6 +1,6 @@
 # T2.5 — Outbox retry × Drift custody convergence audit
 
-**Status:** pending
+**Status:** partial
 **Track:** 2 (Asynchronous Storage & Delay-Tolerant Networking)
 **Dependencies:** T2.3
 **Blocks:** T3.3

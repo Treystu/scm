@@ -1,6 +1,6 @@
 # T1.2 — Wire WifiAwareTransport into the live core (de-orphan, G1)
 
-**Status:** pending
+**Status:** partial
 **Track:** 1 (Native Hardware & Proximity Transport Layer)
 **Dependencies:** T1.1
 **Blocks:** T1.3

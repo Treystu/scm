@@ -1,6 +1,6 @@
 # T3.2 — Hardware-aware routing cost function (battery/charging/motion → route choice)
 
-**Status:** pending
+**Status:** completed
 **Track:** 3 (Mycorrhizal Routing & Hardware-Aware Heuristics)
 **Dependencies:** T3.1
 **Blocks:** T3.3, T3.4
@@ -21,6 +21,6 @@
 - Do not leak precise battery % over the mesh (privacy) — 2-bit class only
 
 ## Verification
-- [ ] Unit tests in `routing/engine.rs`: given equal-hop alternatives, charging peer wins; critical peer chosen only as sole route
-- [ ] Gossip decode of old-schema record defaults correctly (round-trip test both directions)
-- [ ] `integration_mycorrhizal_routing.rs` extended with an energy-skewed topology asserting route selection
+- [x] Unit tests in `routing/engine.rs`: given equal-hop alternatives, charging peer wins; critical peer chosen only as sole route
+- [x] Gossip decode of old-schema record defaults correctly (round-trip test both directions)
+- [x] `integration_mycorrhizal_routing.rs` extended with an energy-skewed topology asserting route selection

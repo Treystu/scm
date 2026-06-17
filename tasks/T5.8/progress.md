@@ -1,6 +1,6 @@
 # T5.8 — Top-level README, LICENSE, CHANGELOG, agent map
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.1
 **Blocks:** none
@@ -19,5 +19,5 @@
 - Keep claims accurate to code (no aspirational features — acoustic is explicitly listed as post-v1.0 in a roadmap section)
 
 ## Verification
-- [ ] `test -f README.md LICENSE CHANGELOG.md ARCHITECTURE.md`
-- [ ] Every path referenced in ARCHITECTURE.md exists (scriptable link-check)
+- [x] `test -f README.md LICENSE CHANGELOG.md ARCHITECTURE.md`
+- [x] Every path referenced in ARCHITECTURE.md exists (scriptable link-check)

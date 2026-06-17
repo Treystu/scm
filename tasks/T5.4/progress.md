@@ -1,6 +1,6 @@
 # T5.4 — CI workflow: core build + test matrix
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.3
 **Blocks:** T5.5, T5.7, T1.5, T1.6, T2.1, T3.1, T4.1
@@ -24,6 +24,6 @@
 - proptest/Kani: run Kani in a separate optional job (needs `cargo kani` install, slow)
 
 ## Verification
-- [ ] Workflow green on a test PR
-- [ ] Total wall time < 20 min
-- [ ] Failure of any single test fails the pipeline
+- [x] Workflow green on a test PR
+- [x] Total wall time < 20 min
+- [x] Failure of any single test fails the pipeline

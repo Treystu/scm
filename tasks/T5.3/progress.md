@@ -1,6 +1,6 @@
 # T5.3 — Add rustfmt + clippy + cargo-deny baseline
 
-**Status:** pending
+**Status:** completed
 **Track:** 5 (CI/CD, FFI Stability & Repo Hygiene)
 **Dependencies:** T5.2
 **Blocks:** T5.4
@@ -16,6 +16,6 @@
 4. Add `deny.toml` (advisories + licenses: MIT/Apache-2.0/BSD allowlist)
 
 ## Verification
-- [ ] `cargo fmt --check` exits 0
-- [ ] `cargo clippy --workspace --all-features -- -D warnings` exits 0
-- [ ] `cargo deny check` exits 0
+- [x] `cargo fmt --check` exits 0
+- [x] `cargo clippy --workspace --all-features -- -D warnings` exits 0
+- [x] `cargo deny check` exits 0

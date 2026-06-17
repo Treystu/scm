@@ -1,6 +1,6 @@
 # T3.3 — StoreAndCarry decision → Drift handoff wiring (close routing→DTN loop)
 
-**Status:** pending
+**Status:** completed
 **Track:** 3 (Mycorrhizal Routing & Hardware-Aware Heuristics)
 **Dependencies:** T2.5, T3.1
 **Blocks:** T3.4
@@ -20,5 +20,5 @@
 - Priority field (u8) must map to drift `RelayProfile` priority thresholds consistently (one mapping table, tested)
 
 ## Verification
-- [ ] Integration test: node with zero peers sends -> message in drift custody with correct TTL/priority
-- [ ] Peer appears later -> delivered (this is T2.2's scenario driven through the public send API rather than drift internals — both must pass)
+- [x] Integration test: node with zero peers sends -> message in drift custody with correct TTL/priority
+- [x] Peer appears later -> delivered (this is T2.2's scenario driven through the public send API rather than drift internals — both must pass)
