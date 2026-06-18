@@ -2,10 +2,12 @@
 
 All notable changes to SCMessenger will be documented in this file.
 
-## [1.0.0-rc1] — 2026-06-17
+## [1.0.0-rc2] — 2026-06-17
 
 Release candidate completing the Fable 5 plan. All core subsystems implemented,
 Rust gatekeeper suite passes, and Android/iOS/WASM builds are verified.
+Includes WiFi Direct/Aware discovery wiring, background sync scheduling, and
+identity backup continuity tests contributed by Gemini.
 
 ### Verification
 
