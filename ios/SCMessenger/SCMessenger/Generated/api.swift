@@ -489,6 +489,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt32: FfiConverterPrimitive {
+    typealias FfiType = Int32
+    typealias SwiftType = Int32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int32, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
     typealias FfiType = UInt64
     typealias SwiftType = UInt64
@@ -3767,6 +3783,10 @@ public protocol MeshServiceProtocol: AnyObject, Sendable {
     
     func exportDiagnostics()  -> String
     
+    func exportIdentityBackup(passphrase: String) throws  -> String
+    
+    func exportIdentityBackupWithSalt(passphrase: String, salt: Data) throws  -> String
+    
     /**
      * Get all connection statistics from the transport health monitor.
      * Returns peer-by-peer connection stats for diagnostics.
@@ -3801,6 +3821,8 @@ public protocol MeshServiceProtocol: AnyObject, Sendable {
     
     func getSwarmBridge()  -> SwarmBridge
     
+    func importIdentityBackup(backup: String, passphrase: String) throws 
+    
     /**
      * Check if service is running
      */
@@ -3830,6 +3852,14 @@ public protocol MeshServiceProtocol: AnyObject, Sendable {
     func onPeerDiscovered(peerId: String) 
     
     func onProximityDataReceived(peerId: String, transport: ProximityTransport, data: Data) 
+    
+    func onWifiAwareDataPathConfirmed(peerId: String, ipAddress: String, port: UInt16) 
+    
+    func onWifiAwarePeerDiscovered(peerId: String, serviceInfo: Data, rssi: Int32) 
+    
+    func onWifiDirectConnectionInfo(peerId: String, groupOwnerIp: String, isGroupOwner: Bool) 
+    
+    func onWifiDirectPeerDiscovered(peerId: String, deviceName: String, deviceAddress: String, rssi: Int32) 
     
     func pause() 
     
@@ -4030,6 +4060,25 @@ open func exportDiagnostics() -> String  {
 })
 }
     
+open func exportIdentityBackup(passphrase: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
+    uniffi_scmessenger_core_fn_method_meshservice_export_identity_backup(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(passphrase),$0
+    )
+})
+}
+    
+open func exportIdentityBackupWithSalt(passphrase: String, salt: Data)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
+    uniffi_scmessenger_core_fn_method_meshservice_export_identity_backup_with_salt(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(passphrase),
+        FfiConverterData.lower(salt),$0
+    )
+})
+}
+    
     /**
      * Get all connection statistics from the transport health monitor.
      * Returns peer-by-peer connection stats for diagnostics.
@@ -4116,6 +4165,15 @@ open func getSwarmBridge() -> SwarmBridge  {
             self.uniffiCloneHandle(),$0
     )
 })
+}
+    
+open func importIdentityBackup(backup: String, passphrase: String)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
+    uniffi_scmessenger_core_fn_method_meshservice_import_identity_backup(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(backup),
+        FfiConverterString.lower(passphrase),$0
+    )
+}
 }
     
     /**
@@ -4214,6 +4272,47 @@ open func onProximityDataReceived(peerId: String, transport: ProximityTransport,
         FfiConverterString.lower(peerId),
         FfiConverterTypeProximityTransport_lower(transport),
         FfiConverterData.lower(data),$0
+    )
+}
+}
+    
+open func onWifiAwareDataPathConfirmed(peerId: String, ipAddress: String, port: UInt16)  {try! rustCall() {
+    uniffi_scmessenger_core_fn_method_meshservice_on_wifi_aware_data_path_confirmed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterString.lower(ipAddress),
+        FfiConverterUInt16.lower(port),$0
+    )
+}
+}
+    
+open func onWifiAwarePeerDiscovered(peerId: String, serviceInfo: Data, rssi: Int32)  {try! rustCall() {
+    uniffi_scmessenger_core_fn_method_meshservice_on_wifi_aware_peer_discovered(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterData.lower(serviceInfo),
+        FfiConverterInt32.lower(rssi),$0
+    )
+}
+}
+    
+open func onWifiDirectConnectionInfo(peerId: String, groupOwnerIp: String, isGroupOwner: Bool)  {try! rustCall() {
+    uniffi_scmessenger_core_fn_method_meshservice_on_wifi_direct_connection_info(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterString.lower(groupOwnerIp),
+        FfiConverterBool.lower(isGroupOwner),$0
+    )
+}
+}
+    
+open func onWifiDirectPeerDiscovered(peerId: String, deviceName: String, deviceAddress: String, rssi: Int32)  {try! rustCall() {
+    uniffi_scmessenger_core_fn_method_meshservice_on_wifi_direct_peer_discovered(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),
+        FfiConverterString.lower(deviceName),
+        FfiConverterString.lower(deviceAddress),
+        FfiConverterInt32.lower(rssi),$0
     )
 }
 }
@@ -9947,6 +10046,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scmessenger_core_checksum_method_meshservice_export_diagnostics() != 13029) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_export_identity_backup() != 2857) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_export_identity_backup_with_salt() != 22) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_scmessenger_core_checksum_method_meshservice_get_all_connection_stats() != 32051) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9972,6 +10077,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_meshservice_get_swarm_bridge() != 46598) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_import_identity_backup() != 43292) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_meshservice_is_running() != 33342) {
@@ -10005,6 +10113,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_meshservice_on_proximity_data_received() != 7497) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_on_wifi_aware_data_path_confirmed() != 40080) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_on_wifi_aware_peer_discovered() != 15717) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_on_wifi_direct_connection_info() != 31225) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_on_wifi_direct_peer_discovered() != 9299) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_meshservice_pause() != 57301) {
