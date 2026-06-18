@@ -31,8 +31,9 @@ import kotlinx.coroutines.*
  */
 class WifiAwareTransport(
     private val context: Context,
-    private val onPeerDiscovered: (peerId: String) -> Unit,
-    private val onDataReceived: (peerId: String, data: ByteArray) -> Unit
+    private val onPeerDiscovered: (peerId: String, serviceInfo: ByteArray?, rssi: Int) -> Unit,
+    private val onDataReceived: (peerId: String, data: ByteArray) -> Unit,
+    private val onDataPathConfirmed: ((peerId: String, ipAddress: String, port: Int) -> Unit)? = null
 ) {
 
     private val wifiAwareManager: WifiAwareManager? =
@@ -210,7 +211,7 @@ class WifiAwareTransport(
 
             // Notify discovery
             val peerIdString = peerId.toString()
-            onPeerDiscovered(peerIdString)
+            onPeerDiscovered(peerIdString, serviceSpecificInfo, 0)
 
             // Initiate data path — Publisher is the RESPONDER (server socket)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -238,7 +239,7 @@ class WifiAwareTransport(
 
             // Notify discovery
             val peerIdString = peerId.toString()
-            onPeerDiscovered(peerIdString)
+            onPeerDiscovered(peerIdString, serviceSpecificInfo, 0)
 
             // Initiate data path — Subscriber is the INITIATOR (client socket)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -354,6 +355,10 @@ class WifiAwareTransport(
                 connection.startReading()
 
                 Timber.i("WiFi Aware responder connected to $peerId")
+
+                val rawIp = socket.inetAddress?.hostAddress ?: ""
+                val ipAddress = if (rawIp.contains("%")) rawIp.substringBefore("%") else rawIp
+                onDataPathConfirmed?.invoke(peerId, ipAddress, socket.port)
             } catch (e: Exception) {
                 serverSocket?.close()
                 Timber.e(e, "Failed to create WiFi Aware responder socket for $peerId")
@@ -377,6 +382,9 @@ class WifiAwareTransport(
                 connection.startReading()
 
                 Timber.i("WiFi Aware initiator connected to $peerId at [$peerIpv6]:$AWARE_PORT")
+
+                val ipAddress = if (peerIpv6.contains("%")) peerIpv6.substringBefore("%") else peerIpv6
+                onDataPathConfirmed?.invoke(peerId, ipAddress, AWARE_PORT)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to create WiFi Aware initiator socket for $peerId at [$peerIpv6]")
             }

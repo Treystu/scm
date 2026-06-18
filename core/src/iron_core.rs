@@ -621,16 +621,53 @@ impl IronCore {
             }
         }
 
-        let _ = self.outbox.write().enqueue(QueuedMessage {
-            message_id: message_id.clone(),
-            recipient_id: recipient_id.to_string(),
-            envelope_data: envelope_data.clone(),
-            queued_at: web_time::SystemTime::now()
-                .duration_since(web_time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
-            attempts: 0,
-        });
+        // Check routing decision
+        let hint = blake3::hash(recipient_id.as_bytes()).as_bytes()[0..4]
+            .try_into()
+            .unwrap_or([0u8; 4]);
+        let msg_id_bytes: [u8; 16] = *uuid::Uuid::parse_str(&message_id).unwrap_or_else(|_| uuid::Uuid::nil()).as_bytes();
+        let now = web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        let decision = self.make_routing_decision(hint, msg_id_bytes, 128, now);
+
+        let mut handoff_to_drift = false;
+        if let Some(dec) = decision {
+            if matches!(dec.primary, crate::routing::NextHop::StoreAndCarry) {
+                handoff_to_drift = true;
+            }
+        }
+
+        if handoff_to_drift {
+            let stored_env = crate::drift::store::StoredEnvelope {
+                envelope_data: envelope_data.clone(),
+                message_id: drift_env.message_id,
+                recipient_hint: drift_env.recipient_hint,
+                created_at: drift_env.created_at,
+                ttl_expiry: drift_env.ttl_expiry,
+                hop_count: drift_env.hop_count,
+                priority: drift_env.priority,
+                received_at: web_time::SystemTime::now()
+                    .duration_since(web_time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            };
+            self.drift_store.write().insert(stored_env);
+            tracing::info!("StoreAndCarry route resolved for {}. Handoff to Drift custody and bypassed active outbox.", message_id);
+        } else {
+            let _ = self.outbox.write().enqueue(QueuedMessage {
+                message_id: message_id.clone(),
+                recipient_id: recipient_id.to_string(),
+                envelope_data: envelope_data.clone(),
+                queued_at: web_time::SystemTime::now()
+                    .duration_since(web_time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                attempts: 0,
+            });
+        }
 
         self.audit_log.write().append(
             AuditEventType::MessageSent,
@@ -673,7 +710,20 @@ impl IronCore {
 
     /// Mark a message as sent (remove from outbox after transport confirms delivery).
     pub fn mark_message_sent(&self, message_id: String) -> bool {
-        self.outbox.write().remove(&message_id)
+        let outbox_removed = self.outbox.write().remove(&message_id);
+        let mut parsed_id = [0u8; 16];
+        let parsed = if let Ok(uuid) = uuid::Uuid::parse_str(&message_id) {
+            parsed_id.copy_from_slice(uuid.as_bytes());
+            true
+        } else {
+            false
+        };
+        let drift_removed = if parsed {
+            self.drift_store.write().remove(&parsed_id)
+        } else {
+            false
+        };
+        outbox_removed || drift_removed
     }
 
     /// Send a message status report for a given peer.

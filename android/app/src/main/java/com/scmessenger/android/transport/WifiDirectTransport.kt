@@ -30,8 +30,10 @@ import kotlinx.coroutines.*
  */
 class WifiDirectTransport(
     private val context: Context,
-    private val onPeerDiscovered: (peerId: String) -> Unit,
-    private val onDataReceived: (peerId: String, data: ByteArray) -> Unit
+    private val getLocalPeerId: () -> String?,
+    private val onPeerDiscovered: (peerId: String, device: WifiP2pDevice) -> Unit,
+    private val onDataReceived: (peerId: String, data: ByteArray) -> Unit,
+    private val onConnectionInfo: ((peerId: String, groupOwnerIp: String, isGroupOwner: Boolean) -> Unit)? = null
 ) {
 
     private val wifiP2pManager: WifiP2pManager? = context.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager
@@ -162,8 +164,9 @@ class WifiDirectTransport(
                     Timber.d("WiFi Direct service discovered: $fullDomainName from ${device.deviceName}")
 
                     if (record["service"] == SERVICE_TYPE) {
+                        val peerId = record["peer_id"] ?: device.deviceAddress
                         discoveredPeers[device.deviceAddress] = device
-                        onPeerDiscovered(device.deviceAddress)
+                        onPeerDiscovered(peerId, device)
 
                         // Initiate connection
                         connectToPeer(device)
@@ -212,9 +215,11 @@ class WifiDirectTransport(
         if (channel == null) return
 
         try {
+            val localPeerId = getLocalPeerId() ?: ""
             val record = mutableMapOf<String, String>().apply {
                 put("service", SERVICE_TYPE)
                 put("version", "1.0")
+                put("peer_id", localPeerId)
             }
 
             val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(
@@ -309,12 +314,18 @@ class WifiDirectTransport(
 
         Timber.d("Connection info - Group owner: $isGroupOwner, Owner address: ${info.groupOwnerAddress}")
 
+        onConnectionInfo?.invoke(
+            "",
+            info.groupOwnerAddress?.hostAddress ?: "127.0.0.1",
+            info.isGroupOwner
+        )
+
         if (isGroupOwner) {
             // We are group owner - start server
             startServer()
         } else {
             // We are client - connect to group owner
-            connectToGroupOwner(info.groupOwnerAddress.hostAddress ?: "")
+            connectToGroupOwner(info.groupOwnerAddress?.hostAddress ?: "")
         }
     }
 
@@ -440,6 +451,75 @@ class WifiDirectTransport(
                 Timber.w(e, "Error closing WiFi Direct socket")
             }
             activeConnections.remove(peerId)
+        }
+    }
+
+    fun discoverPeers(): Boolean {
+        if (!isRunning) {
+            start()
+            return true
+        }
+        startPeerDiscovery()
+        return true
+    }
+
+    fun stopDiscovery() {
+        if (channel != null) {
+            try {
+                wifiP2pManager?.stopPeerDiscovery(channel, null)
+            } catch (e: SecurityException) {
+                Timber.e(e, "Security exception in stopDiscovery")
+            }
+        }
+    }
+
+    fun connect(deviceAddress: String): Boolean {
+        if (channel == null) return false
+        try {
+            val config = WifiP2pConfig().apply {
+                this.deviceAddress = deviceAddress
+                groupOwnerIntent = 0 // Prefer client
+            }
+            wifiP2pManager?.connect(channel, config, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Timber.d("Connection initiated to $deviceAddress")
+                }
+                override fun onFailure(reason: Int) {
+                    Timber.e("Failed to connect to $deviceAddress: $reason")
+                }
+            })
+            return true
+        } catch (e: SecurityException) {
+            Timber.e(e, "Security exception in connect")
+            return false
+        }
+    }
+
+    fun createGroup(groupName: String): Boolean {
+        if (channel == null) return false
+        try {
+            wifiP2pManager?.createGroup(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Timber.d("Group created successfully: $groupName")
+                }
+                override fun onFailure(reason: Int) {
+                    Timber.e("Failed to create group: $reason")
+                }
+            })
+            return true
+        } catch (e: SecurityException) {
+            Timber.e(e, "Security exception in createGroup")
+            return false
+        }
+    }
+
+    fun removeGroup() {
+        if (channel != null) {
+            try {
+                wifiP2pManager?.removeGroup(channel, null)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to remove group")
+            }
         }
     }
 

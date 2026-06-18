@@ -66,10 +66,32 @@ class MeshApplication : Application() {
         com.scmessenger.android.utils.NotificationHelper.createNotificationChannels(this)
         Timber.i("Notification channels created")
 
+        schedulePeriodicMaintenance()
+
         Timber.i("SCMessenger application started")
 
         // Application-level initialization
         // The actual mesh service will be started/stopped by user action
+    }
+
+    private fun schedulePeriodicMaintenance() {
+        val constraints = androidx.work.Constraints.Builder()
+            .setRequiredNetworkType(androidx.work.NetworkType.NOT_REQUIRED)
+            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.scmessenger.android.service.MeshSyncWorker>(
+            15, java.util.concurrent.TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .build()
+
+        androidx.work.WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "com.scmessenger.mesh.maintenance",
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
+        Timber.i("Periodic background maintenance worker scheduled")
     }
 
     override fun onTerminate() {

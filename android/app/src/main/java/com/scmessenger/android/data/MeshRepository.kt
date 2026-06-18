@@ -883,6 +883,18 @@ open class MeshRepository(private val context: Context) {
                 },
                 getLocalPeerId = {
                     ironCore?.getIdentityInfo()?.libp2pPeerId
+                },
+                onWifiAwarePeerDiscovered = { peerId, serviceInfo, rssi ->
+                    meshService?.onWifiAwarePeerDiscovered(peerId, serviceInfo, rssi)
+                },
+                onWifiAwareDataPathConfirmed = { peerId, ipAddress, port ->
+                    meshService?.onWifiAwareDataPathConfirmed(peerId, ipAddress, port.toUShort())
+                },
+                onWifiDirectPeerDiscovered = { peerId, deviceName, deviceAddress ->
+                    meshService?.onWifiDirectPeerDiscovered(peerId, deviceName, deviceAddress, 0)
+                },
+                onWifiDirectConnectionInfo = { peerId, groupOwnerIp, isGroupOwner ->
+                    meshService?.onWifiDirectConnectionInfo(peerId, groupOwnerIp, isGroupOwner)
                 }
             )
 
@@ -3190,6 +3202,8 @@ open class MeshRepository(private val context: Context) {
         )
     }
 
+    fun getMeshService(): uniffi.api.MeshService? = meshService
+
     fun setPlatformBridge(bridge: uniffi.api.PlatformBridge) {
         meshService?.setPlatformBridge(bridge)
         // Wire TransportManager to AndroidPlatformBridge for BLE adjustment application
@@ -3199,6 +3213,10 @@ open class MeshRepository(private val context: Context) {
                 // Wire WiFi Aware transport for PlatformBridge FFI delegation
                 tm.getWifiAwareTransport()?.let { aware ->
                     bridge.setWifiAwareTransport(aware)
+                }
+                // Wire WiFi Direct transport for PlatformBridge FFI delegation
+                tm.getWifiDirectTransport()?.let { direct ->
+                    bridge.setWifiDirectTransport(direct)
                 }
             }
             // Wire BLE components into platform bridge for data forwarding

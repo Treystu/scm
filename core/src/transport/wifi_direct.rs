@@ -67,10 +67,17 @@ pub trait WifiDirectPlatformBridge: Send + Sync {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+type PeersChangedCallback = Box<dyn Fn(Vec<WifiDirectPeer>) + Send + Sync>;
+#[cfg(not(target_arch = "wasm32"))]
+type ConnectionInfoCallback = Box<dyn Fn(GroupInfo) + Send + Sync>;
+
+#[cfg(not(target_arch = "wasm32"))]
 pub struct PlatformWifiDirectBridge {
     platform_bridge: std::sync::Arc<parking_lot::Mutex<Option<Box<dyn crate::PlatformBridge>>>>,
     discovered_peers: Arc<parking_lot::Mutex<HashMap<String, WifiDirectPeer>>>,
     group_info: Arc<parking_lot::Mutex<Option<GroupInfo>>>,
+    on_peers_changed: Arc<parking_lot::Mutex<Option<PeersChangedCallback>>>,
+    on_connection_info: Arc<parking_lot::Mutex<Option<ConnectionInfoCallback>>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -82,6 +89,8 @@ impl PlatformWifiDirectBridge {
             platform_bridge,
             discovered_peers: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             group_info: Arc::new(parking_lot::Mutex::new(None)),
+            on_peers_changed: Arc::new(parking_lot::Mutex::new(None)),
+            on_connection_info: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
 
@@ -93,15 +102,23 @@ impl PlatformWifiDirectBridge {
     }
 
     pub fn handle_peers_changed(&self, peers: Vec<WifiDirectPeer>) {
-        let mut map = self.discovered_peers.lock();
-        map.clear();
-        for peer in peers {
-            map.insert(peer.device_address.clone(), peer);
+        {
+            let mut map = self.discovered_peers.lock();
+            map.clear();
+            for peer in peers.clone() {
+                map.insert(peer.device_address.clone(), peer);
+            }
+        }
+        if let Some(cb) = self.on_peers_changed.lock().as_ref() {
+            cb(peers);
         }
     }
 
     pub fn handle_connection_info(&self, info: GroupInfo) {
-        *self.group_info.lock() = Some(info);
+        *self.group_info.lock() = Some(info.clone());
+        if let Some(cb) = self.on_connection_info.lock().as_ref() {
+            cb(info);
+        }
     }
 
     pub fn get_group_info(&self) -> Option<GroupInfo> {
@@ -169,8 +186,12 @@ impl WifiDirectPlatformBridge for PlatformWifiDirectBridge {
         Ok(())
     }
 
-    fn set_on_peers_changed(&self, _callback: Box<dyn Fn(Vec<WifiDirectPeer>) + Send + Sync>) {}
-    fn set_on_connection_info(&self, _callback: Box<dyn Fn(GroupInfo) + Send + Sync>) {}
+    fn set_on_peers_changed(&self, callback: Box<dyn Fn(Vec<WifiDirectPeer>) + Send + Sync>) {
+        *self.on_peers_changed.lock() = Some(callback);
+    }
+    fn set_on_connection_info(&self, callback: Box<dyn Fn(GroupInfo) + Send + Sync>) {
+        *self.on_connection_info.lock() = Some(callback);
+    }
     fn set_on_message_received(&self, _callback: Box<dyn Fn(String, Vec<u8>) + Send + Sync>) {}
 }
 
@@ -272,6 +293,28 @@ impl WifiDirectTransport {
 
     pub fn get_group_info(&self) -> Option<GroupInfo> {
         self.group_info.read().clone()
+    }
+
+    pub fn wire_callbacks(&self) {
+        let discovered_peers = self.discovered_peers.clone();
+        self.bridge.set_on_peers_changed(Box::new(move |peers: Vec<WifiDirectPeer>| {
+            let mut map = discovered_peers.write();
+            map.clear();
+            for peer in peers {
+                map.insert(peer.device_address.clone(), peer);
+            }
+        }));
+
+        let group_info = self.group_info.clone();
+        let state = self.state.clone();
+        self.bridge.set_on_connection_info(Box::new(move |info: GroupInfo| {
+            if info.group_owner {
+                *state.write() = WifiDirectState::GroupOwner;
+            } else {
+                *state.write() = WifiDirectState::GroupClient;
+            }
+            *group_info.write() = Some(info);
+        }));
     }
 
     pub async fn shutdown(&self) -> Result<(), WifiDirectError> {

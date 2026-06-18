@@ -67,6 +67,9 @@ class AndroidPlatformBridge @Inject constructor(
     // WiFi Aware transport reference (set by TransportManager)
     @Volatile private var wifiAwareTransport: com.scmessenger.android.transport.WifiAwareTransport? = null
 
+    // WiFi Direct transport reference (set by TransportManager)
+    @Volatile private var wifiDirectTransport: com.scmessenger.android.transport.WifiDirectTransport? = null
+
     // Current state
     @Volatile private var currentBatteryPct: UByte = 100u
     @Volatile private var isCharging: Boolean = false
@@ -119,6 +122,14 @@ class AndroidPlatformBridge @Inject constructor(
     fun setWifiAwareTransport(transport: com.scmessenger.android.transport.WifiAwareTransport) {
         this.wifiAwareTransport = transport
         Timber.d("WiFi Aware transport set for PlatformBridge FFI")
+    }
+
+    /**
+     * Set WiFi Direct transport for PlatformBridge FFI delegation.
+     */
+    fun setWifiDirectTransport(transport: com.scmessenger.android.transport.WifiDirectTransport) {
+        this.wifiDirectTransport = transport
+        Timber.d("WiFi Direct transport set for PlatformBridge FFI")
     }
 
     /**
@@ -504,26 +515,43 @@ class AndroidPlatformBridge @Inject constructor(
     // ========================================================================
 
     override fun wifiDirectDiscoverPeers(): Boolean {
-        Timber.d("wifiDirectDiscoverPeers")
-        return false
+        val direct = wifiDirectTransport
+        if (direct == null) {
+            Timber.w("wifiDirectDiscoverPeers: WiFi Direct transport not available")
+            return false
+        }
+        Timber.i("wifiDirectDiscoverPeers: starting discovery")
+        return direct.discoverPeers()
     }
 
     override fun wifiDirectStopDiscovery() {
-        Timber.d("wifiDirectStopDiscovery")
+        Timber.i("wifiDirectStopDiscovery: stopping discovery")
+        wifiDirectTransport?.stopDiscovery()
     }
 
     override fun wifiDirectConnect(deviceAddress: String): Boolean {
-        Timber.d("wifiDirectConnect: $deviceAddress")
-        return false
+        val direct = wifiDirectTransport
+        if (direct == null) {
+            Timber.w("wifiDirectConnect: WiFi Direct transport not available")
+            return false
+        }
+        Timber.i("wifiDirectConnect: connecting to $deviceAddress")
+        return direct.connect(deviceAddress)
     }
 
     override fun wifiDirectCreateGroup(groupName: String): Boolean {
-        Timber.d("wifiDirectCreateGroup: $groupName")
-        return false
+        val direct = wifiDirectTransport
+        if (direct == null) {
+            Timber.w("wifiDirectCreateGroup: WiFi Direct transport not available")
+            return false
+        }
+        Timber.i("wifiDirectCreateGroup: creating group $groupName")
+        return direct.createGroup(groupName)
     }
 
     override fun wifiDirectRemoveGroup() {
-        Timber.d("wifiDirectRemoveGroup")
+        Timber.i("wifiDirectRemoveGroup: removing group")
+        wifiDirectTransport?.removeGroup()
     }
 
     // ========================================================================

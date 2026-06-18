@@ -178,6 +178,11 @@ impl MeshStore {
         self.messages.is_empty()
     }
 
+    /// Remove a message by ID. Returns true if it was present.
+    pub fn remove(&mut self, id: &MessageId) -> bool {
+        self.messages.remove(id).is_some()
+    }
+
     /// Remove expired messages
     ///
     /// Returns the number of messages removed.

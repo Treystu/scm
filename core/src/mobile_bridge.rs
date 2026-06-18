@@ -9,8 +9,8 @@ use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
 use crate::settings::MeshSettings;
-use crate::transport::wifi_aware::{WifiAwareError, WifiAwarePlatformBridge};
-use crate::transport::wifi_direct::PlatformWifiDirectBridge;
+use crate::transport::wifi_aware::{WifiAwareError, WifiAwarePlatformBridge, WifiAwareConfig, WifiAwareTransport};
+use crate::transport::wifi_direct::{PlatformWifiDirectBridge, WifiDirectTransport};
 use crate::transport::SwarmHandle;
 
 // MOBILE SERVICE
@@ -178,6 +178,8 @@ pub struct MeshService {
     auto_adjust: Arc<AutoAdjustEngine>,
     wifi_aware_bridge: Arc<Mutex<Option<Arc<PlatformWifiAwareBridge>>>>,
     wifi_direct_bridge: Arc<Mutex<Option<Arc<PlatformWifiDirectBridge>>>>,
+    wifi_aware_transport: Arc<Mutex<Option<Arc<crate::transport::wifi_aware::WifiAwareTransport>>>>,
+    wifi_direct_transport: Arc<Mutex<Option<Arc<crate::transport::wifi_direct::WifiDirectTransport>>>>,
     /// Platform-provided delegate for decentralized protocol events (Phase 4).
     external_delegate: Arc<Mutex<Option<Box<dyn crate::CoreDelegate>>>>,
 }
@@ -205,6 +207,8 @@ impl MeshService {
             external_delegate: Arc::new(Mutex::new(None)),
             wifi_aware_bridge: Arc::new(Mutex::new(None)),
             wifi_direct_bridge: Arc::new(Mutex::new(None)),
+            wifi_aware_transport: Arc::new(Mutex::new(None)),
+            wifi_direct_transport: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -230,6 +234,8 @@ impl MeshService {
             external_delegate: Arc::new(Mutex::new(None)),
             wifi_aware_bridge: Arc::new(Mutex::new(None)),
             wifi_direct_bridge: Arc::new(Mutex::new(None)),
+            wifi_aware_transport: Arc::new(Mutex::new(None)),
+            wifi_direct_transport: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -259,6 +265,8 @@ impl MeshService {
             external_delegate: Arc::new(Mutex::new(None)),
             wifi_aware_bridge: Arc::new(Mutex::new(None)),
             wifi_direct_bridge: Arc::new(Mutex::new(None)),
+            wifi_aware_transport: Arc::new(Mutex::new(None)),
+            wifi_direct_transport: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -333,19 +341,74 @@ impl MeshService {
             core.drift_activate();
         }
 
-        // Initialize WiFi Aware transport if enabled and platform bridge is set
+        // Initialize WiFi Aware and WiFi Direct transports if enabled and platform bridge is set
         if self.platform_bridge.lock().is_some() {
             let aware_bridge = Arc::new(PlatformWifiAwareBridge::new_platform_ref(
                 self.platform_bridge.clone(),
             ));
-            *self.wifi_aware_bridge.lock() = Some(aware_bridge);
+            *self.wifi_aware_bridge.lock() = Some(aware_bridge.clone());
             tracing::info!("WiFi Aware bridge adapter initialized");
 
             let direct_bridge = Arc::new(PlatformWifiDirectBridge::new_platform_ref(
                 self.platform_bridge.clone(),
             ));
-            *self.wifi_direct_bridge.lock() = Some(direct_bridge);
+            *self.wifi_direct_bridge.lock() = Some(direct_bridge.clone());
             tracing::info!("WiFi Direct bridge adapter initialized");
+
+            // Load settings using MeshSettingsManager
+            let settings = if let Some(ref path) = self.storage_path {
+                let manager = MeshSettingsManager::new(path.clone());
+                manager.load().unwrap_or_default()
+            } else {
+                MeshSettings::default()
+            };
+
+            // WiFi Aware Transport
+            if settings.wifi_aware_enabled {
+                let config = WifiAwareConfig {
+                    publish_enabled: true,
+                    subscribe_enabled: true,
+                    ..Default::default()
+                };
+                if let Ok(transport) = WifiAwareTransport::new(config, aware_bridge) {
+                    let transport = Arc::new(transport);
+                    let transport_clone = transport.clone();
+                    let rt = self.swarm_bridge.get_runtime_handle();
+                    rt.spawn(async move {
+                        if let Err(e) = transport_clone.initialize().await {
+                            tracing::error!("WiFi Aware transport initialization failed: {:?}", e);
+                        } else {
+                            transport_clone.wire_discovery_callback();
+                            if let Err(e) = transport_clone.publish_service().await {
+                                tracing::error!("WiFi Aware publish failed: {:?}", e);
+                            }
+                            if let Err(e) = transport_clone.subscribe().await {
+                                tracing::error!("WiFi Aware subscribe failed: {:?}", e);
+                            }
+                        }
+                    });
+                    *self.wifi_aware_transport.lock() = Some(transport);
+                }
+            }
+
+            // WiFi Direct Transport
+            if settings.wifi_direct_enabled {
+                let transport = WifiDirectTransport::new(direct_bridge);
+                let transport = Arc::new(transport);
+                let transport_clone = transport.clone();
+                let rt = self.swarm_bridge.get_runtime_handle();
+                rt.spawn(async move {
+                    if let Err(e) = transport_clone.initialize().await {
+                        tracing::error!("WiFi Direct transport initialization failed: {:?}", e);
+                    } else {
+                        transport_clone.wire_callbacks();
+                        if let Err(e) = transport_clone.start_discovery().await {
+                            tracing::error!("WiFi Direct start discovery failed: {:?}", e);
+                        }
+                    }
+                });
+                *self.wifi_direct_transport.lock() = Some(transport);
+            }
         }
 
         // Update state
@@ -1234,6 +1297,118 @@ impl MeshService {
         self.core.lock().clone()
     }
 
+    pub fn on_wifi_aware_peer_discovered(
+        &self,
+        peer_id: String,
+        service_info: Vec<u8>,
+        rssi: i32,
+    ) {
+        if let Some(transport) = self.wifi_aware_transport.lock().as_ref() {
+            transport.add_discovered_peer(peer_id.clone(), service_info.clone(), rssi);
+        }
+        if let Some(aware_bridge) = self.wifi_aware_bridge.lock().as_ref() {
+            aware_bridge.handle_service_discovered(peer_id.clone(), service_info, rssi);
+        }
+
+        let transport_opt = self.wifi_aware_transport.lock().clone();
+        let swarm_bridge = self.swarm_bridge.clone();
+        if let Some(transport) = transport_opt {
+            let rt = swarm_bridge.get_runtime_handle();
+            rt.spawn(async move {
+                if let Ok(peer_id_parsed) = peer_id.parse::<libp2p::PeerId>() {
+                    let pmk = blake3::derive_key("SCMessenger Wi-Fi Aware PMK", &[0x42u8; 32]);
+                    if let Ok(path_info) = transport.create_data_path(peer_id_parsed, &pmk).await {
+                        let multiaddr_str = if path_info.ip_address.contains(':') {
+                            format!("/ip6/{}/tcp/{}", path_info.ip_address, path_info.port)
+                        } else {
+                            format!("/ip4/{}/tcp/{}", path_info.ip_address, path_info.port)
+                        };
+                        let _ = swarm_bridge.dial(multiaddr_str);
+                    }
+                }
+            });
+        }
+    }
+
+    pub fn on_wifi_aware_data_path_confirmed(
+        &self,
+        peer_id: String,
+        ip_address: String,
+        port: u16,
+    ) {
+        if let Some(aware_bridge) = self.wifi_aware_bridge.lock().as_ref() {
+            aware_bridge.handle_data_path_confirmed(peer_id, ip_address, port);
+        }
+    }
+
+    pub fn on_wifi_direct_peer_discovered(
+        &self,
+        peer_id: String,
+        device_name: String,
+        device_address: String,
+        rssi: i32,
+    ) {
+        if let Ok(peer_id_parsed) = peer_id.parse::<libp2p::PeerId>() {
+            let peer = crate::transport::wifi_direct::WifiDirectPeer {
+                peer_id: peer_id_parsed,
+                device_name,
+                device_address,
+                rssi,
+            };
+            if let Some(transport) = self.wifi_direct_transport.lock().as_ref() {
+                transport.register_peer(peer.clone());
+            }
+            if let Some(direct_bridge) = self.wifi_direct_bridge.lock().as_ref() {
+                direct_bridge.handle_peers_changed(vec![peer]);
+            }
+        }
+    }
+
+    pub fn on_wifi_direct_connection_info(
+        &self,
+        _peer_id: String,
+        group_owner_ip: String,
+        is_group_owner: bool,
+    ) {
+        let info = crate::transport::wifi_direct::GroupInfo {
+            group_owner: is_group_owner,
+            group_owner_ip: Some(group_owner_ip.clone()),
+            client_ips: vec![],
+            interface_name: "wlan0".to_string(),
+        };
+
+        if let Some(transport) = self.wifi_direct_transport.lock().as_ref() {
+            transport.set_group_info(info.clone());
+        }
+        if let Some(direct_bridge) = self.wifi_direct_bridge.lock().as_ref() {
+            direct_bridge.handle_connection_info(info);
+        }
+
+        if !is_group_owner {
+            let swarm_bridge = self.swarm_bridge.clone();
+            let rt = swarm_bridge.get_runtime_handle();
+            rt.spawn(async move {
+                let multiaddr_str = format!("/ip4/{}/tcp/9001", group_owner_ip);
+                let _ = swarm_bridge.dial(multiaddr_str);
+            });
+        }
+    }
+
+    pub fn export_identity_backup(&self, passphrase: String) -> Result<String, crate::IronCoreError> {
+        let core = self.core.lock().clone().ok_or(crate::IronCoreError::NotInitialized)?;
+        core.export_identity_backup(passphrase)
+    }
+
+    pub fn export_identity_backup_with_salt(&self, passphrase: String, salt: Vec<u8>) -> Result<String, crate::IronCoreError> {
+        let core = self.core.lock().clone().ok_or(crate::IronCoreError::NotInitialized)?;
+        core.export_identity_backup_with_salt(passphrase, Some(salt))
+    }
+
+    pub fn import_identity_backup(&self, backup: String, passphrase: String) -> Result<(), crate::IronCoreError> {
+        let core = self.core.lock().clone().ok_or(crate::IronCoreError::NotInitialized)?;
+        core.import_identity_backup(backup, passphrase)
+    }
+
     // Group 1: IronCore entrypoints (methods not in #[uniffi::export] block)
     // -----------------------------------------------------------------------
 
@@ -1599,6 +1774,7 @@ pub struct PlatformWifiAwareBridge {
     platform_bridge: std::sync::Arc<Mutex<Option<Box<dyn PlatformBridge>>>>,
     discovered_peers: Arc<Mutex<HashMap<String, (Vec<u8>, i32)>>>,
     data_path_results: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<std::net::SocketAddr>>>>,
+    on_service_discovered: Arc<Mutex<Option<Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>>>>,
 }
 
 impl PlatformWifiAwareBridge {
@@ -1609,6 +1785,7 @@ impl PlatformWifiAwareBridge {
             platform_bridge,
             discovered_peers: Arc::new(Mutex::new(HashMap::new())),
             data_path_results: Arc::new(Mutex::new(HashMap::new())),
+            on_service_discovered: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -1623,6 +1800,9 @@ impl PlatformWifiAwareBridge {
         self.discovered_peers
             .lock()
             .insert(peer_id.clone(), (service_info.clone(), rssi));
+        if let Some(cb) = self.on_service_discovered.lock().as_ref() {
+            cb(peer_id, service_info, rssi);
+        }
     }
 
     pub fn handle_data_path_confirmed(&self, peer_id: String, ip_address: String, port: u16) {
@@ -1725,8 +1905,9 @@ impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
 
     fn set_on_service_discovered(
         &self,
-        _callback: Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>,
+        callback: Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>,
     ) {
+        *self.on_service_discovered.lock() = Some(callback);
     }
 
     fn set_on_message_received(&self, _callback: Box<dyn Fn(String, Vec<u8>) + Send + Sync>) {}
