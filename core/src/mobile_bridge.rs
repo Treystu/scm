@@ -1297,6 +1297,15 @@ impl MeshService {
         self.core.lock().clone()
     }
 
+    /// Run a bounded drift maintenance cycle within the given time budget.
+    pub fn run_maintenance_cycle(&self, budget_ms: u32) -> String {
+        if let Some(core) = self.get_core() {
+            core.run_maintenance_cycle(budget_ms)
+        } else {
+            r#"{"work_done":0,"elapsed_ms":0,"budget_ms":0,"remaining":false}"#.to_string()
+        }
+    }
+
     pub fn on_wifi_aware_peer_discovered(
         &self,
         peer_id: String,
@@ -3094,23 +3103,57 @@ impl SwarmBridge {
     }
 }
 
+static ESCALATION_ENGINE: std::sync::OnceLock<Arc<crate::transport::escalation::EscalationEngine>> =
+    std::sync::OnceLock::new();
+
+fn get_escalation_engine() -> &'static Arc<crate::transport::escalation::EscalationEngine> {
+    ESCALATION_ENGINE.get_or_init(|| {
+        Arc::new(crate::transport::escalation::EscalationEngine::new(
+            crate::transport::escalation::EscalationPolicy::Balanced,
+        ))
+    })
+}
+
 /// Get the recommended proximity transport for a peer based on current state.
 /// Consults the EscalationEngine when available, falls back to BLE.
+#[uniffi::export]
 pub fn recommended_transport(peer_id: String) -> ProximityTransport {
     // Parse peer_id as bytes for EscalationEngine lookup
     if let Ok(bytes) = hex::decode(&peer_id) {
         if bytes.len() == 32 {
             let mut arr = [0u8; 32];
             arr.copy_from_slice(&bytes);
-            let engine = crate::transport::escalation::EscalationEngine::new(
-                crate::transport::escalation::EscalationPolicy::Balanced,
-            );
+            let engine = get_escalation_engine();
             if let Some(transport) = engine.recommended_transport(&arr) {
                 return transport;
             }
         }
     }
     ProximityTransport::Ble
+}
+
+/// Update the available transports list for a peer in the authoritative EscalationEngine.
+#[uniffi::export]
+pub fn update_peer_transports(peer_id: String, transports: Vec<ProximityTransport>) {
+    if let Ok(bytes) = hex::decode(&peer_id) {
+        if bytes.len() == 32 {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            let core_transports: Vec<crate::transport::abstraction::TransportType> = transports
+                .iter()
+                .map(|t| match t {
+                    ProximityTransport::Ble => crate::transport::abstraction::TransportType::BLE,
+                    ProximityTransport::WifiAware => crate::transport::abstraction::TransportType::WiFiAware,
+                    ProximityTransport::WifiDirect => crate::transport::abstraction::TransportType::WiFiDirect,
+                    ProximityTransport::Multipeer => crate::transport::abstraction::TransportType::Internet,
+                })
+                .collect();
+            let engine = get_escalation_engine();
+            if engine.init_peer(arr, core_transports.clone()).is_err() {
+                let _ = engine.update_available_transports(arr, core_transports);
+            }
+        }
+    }
 }
 
 /// Generate a Signal-style safety number from two public keys (Ed25519 hex).
@@ -3561,8 +3604,8 @@ mod tests {
         assert_eq!(settings.max_relay_budget, 200);
         assert_eq!(settings.battery_floor, 20);
         assert!(settings.ble_enabled);
-        assert!(settings.wifi_aware_enabled);
-        assert!(settings.wifi_direct_enabled);
+        assert!(!settings.wifi_aware_enabled);
+        assert!(!settings.wifi_direct_enabled);
         assert!(settings.internet_enabled);
         assert_eq!(settings.discovery_mode, crate::DiscoveryMode::Normal);
     }

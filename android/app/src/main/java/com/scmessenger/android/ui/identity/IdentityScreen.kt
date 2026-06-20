@@ -28,6 +28,8 @@ import com.scmessenger.android.ui.components.IdenticonFromPeerId
 import com.scmessenger.android.ui.viewmodels.IdentityViewModel
 import timber.log.Timber
 
+import com.scmessenger.android.data.IdentityState
+
 /**
  * Identity screen - Display public key, QR code, and export options.
  *
@@ -41,6 +43,7 @@ fun IdentityScreen(
     viewModel: IdentityViewModel = hiltViewModel()
 ) {
     val identityInfo by viewModel.identityInfo.collectAsState()
+    val identityState by viewModel.identityState.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val successMessage by viewModel.successMessage.collectAsState()
@@ -103,65 +106,58 @@ fun IdentityScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when {
-                // P0_ANDROID_IDENTITY_PROOF_OF_WORK: distinguish between "initial
-                // load" (isLoading + Idle progress stage) and "active creation"
-                // (progressStage != Idle). The old code conflated them and
-                // replaced the entire form with a tiny centered spinner during
-                // creation, hiding the button + form + everything from the user.
-                // Now we only show the centered spinner during the very first
-                // identityInfo load; once we know identity is not initialized,
-                // we render the form WITH the proof-of-work stages inline.
-                //
-                // v0.3.4 (P0_ANDROID_CRASHFIX): `progressStage == null` became
-                // `progressStage is IdentityProgressStage.Idle` because
-                // _progressStage is now non-nullable in IdentityViewModel.
-                isLoading && progressStage is com.scmessenger.android.ui.viewmodels.IdentityProgressStage.Idle && identityInfo == null -> {
-                    CircularProgressIndicator(
+            when (identityState) {
+                IdentityState.CachedPendingHydration -> {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text(
+                            text = "Restoring your identity…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                IdentityState.Restoring -> {
+                    IdentityNotInitializedView(
+                        isCreating = true,
+                        progressStage = progressStage,
+                        progressSubDetail = progressSubDetail,
+                        onCreateIdentity = { nickname -> viewModel.createIdentity(nickname) },
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
 
-                identityInfo == null || identityInfo?.initialized != true -> {
-                    // P0_SHARED_IDENTITY: if an identity backup exists on disk but
-                    // the Rust core hasn't hydrated yet (cold start, slow service),
-                    // show a "Restoring" spinner instead of the creation form.
-                    // But ONLY if we're actually loading — if loadIdentity() completed
-                    // and still returned null, the identity genuinely doesn't exist.
-                    if (viewModel.isBackupAvailable() && isLoading) {
-                        Column(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            CircularProgressIndicator()
-                            Text(
-                                text = "Restoring your identity…",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                IdentityState.Ready -> {
+                    val resolvedIdentity = identityInfo
+                    if (resolvedIdentity != null && resolvedIdentity.initialized) {
+                        IdentityContent(
+                            identityInfo = resolvedIdentity,
+                            qrCodeData = qrCodeData,
+                            error = error,
+                            successMessage = successMessage,
+                            onClearError = { viewModel.clearError() },
+                            onClearSuccess = { viewModel.clearSuccessMessage() }
+                        )
                     } else {
-                        IdentityNotInitializedView(
-                            isCreating = isLoading,
-                            progressStage = progressStage,
-                            progressSubDetail = progressSubDetail,
-                            onCreateIdentity = { nickname -> viewModel.createIdentity(nickname) },
+                        // Fallback in case state claims ready but info is not here yet
+                        CircularProgressIndicator(
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
                 }
 
                 else -> {
-                    // Show identity — identityInfo is non-null and initialized here
-                    val resolvedIdentity = identityInfo ?: return@Box
-                    IdentityContent(
-                        identityInfo = resolvedIdentity,
-                        qrCodeData = qrCodeData,
-                        error = error,
-                        successMessage = successMessage,
-                        onClearError = { viewModel.clearError() },
-                        onClearSuccess = { viewModel.clearSuccessMessage() }
+                    IdentityNotInitializedView(
+                        isCreating = progressStage !is com.scmessenger.android.ui.viewmodels.IdentityProgressStage.Idle,
+                        progressStage = progressStage,
+                        progressSubDetail = progressSubDetail,
+                        onCreateIdentity = { nickname -> viewModel.createIdentity(nickname) },
+                        modifier = Modifier.align(Alignment.Center)
                     )
                 }
             }

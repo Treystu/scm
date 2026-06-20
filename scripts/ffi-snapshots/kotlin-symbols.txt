@@ -76,7 +76,9 @@
     fun `enforceRetention`(`maxMessages`: kotlin.UInt): kotlin.UInt
     fun `exportAuditLog`(): kotlin.String
     fun `exportDiagnostics`(): kotlin.String
+    fun `exportIdentityBackupWithSalt`(`passphrase`: kotlin.String, `salt`: kotlin.ByteArray): kotlin.String
     fun `exportIdentityBackupWithSalt`(`passphrase`: kotlin.String, `salt`: kotlin.ByteArray?): kotlin.String
+    fun `exportIdentityBackup`(`passphrase`: kotlin.String): kotlin.String
     fun `exportIdentityBackup`(`passphrase`: kotlin.String): kotlin.String
     fun `exportLogs`(): kotlin.String
     fun `extractPublicKeyFromPeerId`(`peerId`: kotlin.String): kotlin.String
@@ -115,6 +117,7 @@
     fun `hideMessagesForPeer`(`peerId`: kotlin.String): kotlin.UInt
     fun `historyManager`(): HistoryManager
     fun `identityId`(): kotlin.String?
+    fun `importIdentityBackup`(`backup`: kotlin.String, `passphrase`: kotlin.String)
     fun `importIdentityBackup`(`backup`: kotlin.String, `passphrase`: kotlin.String)
     fun `inboxCount`(): kotlin.UInt
     fun `initializeIdentity`()
@@ -159,6 +162,10 @@
     fun `onProximityDataReceived`(`peerId`: kotlin.String, `transport`: ProximityTransport, `data`: kotlin.ByteArray)
     fun `onProximityDataReceived`(`peerId`: kotlin.String, `transport`: ProximityTransport, `data`: kotlin.ByteArray)
     fun `onReceiptReceived`(`messageId`: kotlin.String, `status`: kotlin.String)
+    fun `onWifiAwareDataPathConfirmed`(`peerId`: kotlin.String, `ipAddress`: kotlin.String, `port`: kotlin.UShort)
+    fun `onWifiAwarePeerDiscovered`(`peerId`: kotlin.String, `serviceInfo`: kotlin.ByteArray, `rssi`: kotlin.Int)
+    fun `onWifiDirectConnectionInfo`(`peerId`: kotlin.String, `groupOwnerIp`: kotlin.String, `isGroupOwner`: kotlin.Boolean)
+    fun `onWifiDirectPeerDiscovered`(`peerId`: kotlin.String, `deviceName`: kotlin.String, `deviceAddress`: kotlin.String, `rssi`: kotlin.Int)
     fun `outboxCount`(): kotlin.UInt
     fun `overrideBleAdvertiseInterval`(`intervalMs`: kotlin.UShort?)
     fun `overrideBleScanInterval`(`intervalMs`: kotlin.UInt)

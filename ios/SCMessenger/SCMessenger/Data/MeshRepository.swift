@@ -894,27 +894,63 @@ final class MeshRepository {
         }
     }
 
+    private func getPlatformSecuredPassphrase() -> String {
+        let service = "com.scmessenger.identity.passphrase"
+        let account = "passphrase_v1"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecSuccess, let data = result as? Data, let passphrase = String(data: data, encoding: .utf8) {
+            return passphrase
+        }
+        let newPassphrase = UUID().uuidString + UUID().uuidString
+        if let data = newPassphrase.data(using: .utf8) {
+            let addQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            ]
+            _ = SecItemAdd(addQuery as CFDictionary, nil)
+        }
+        return newPassphrase
+    }
+
     @discardableResult
     private func restoreIdentityFromKeychain(ironCore: IronCore) -> Bool {
         guard let backupPayload = readIdentityBackupFromKeychain() else {
             return false
         }
+        let passphrase = getPlatformSecuredPassphrase()
         do {
-            // TODO: Use a user-provided or keychain-derived passphrase instead of a placeholder.
-            try ironCore.importIdentityBackup(backup: backupPayload, passphrase: "SCMessenger-Backup-Placeholder")
+            try ironCore.importIdentityBackup(backup: backupPayload, passphrase: passphrase)
             logVerbose("Restored identity from iOS Keychain backup payload")
             return true
         } catch {
-            logger.warning("Identity Keychain restore failed: \(error.localizedDescription, privacy: .public)")
-            return false
+            // Legacy fallback if the backup was encrypted with the old placeholder
+            do {
+                try ironCore.importIdentityBackup(backup: backupPayload, passphrase: "SCMessenger-Backup-Placeholder")
+                logVerbose("Restored identity using legacy iOS Keychain backup placeholder passphrase")
+                return true
+            } catch {
+                logger.warning("Identity Keychain restore failed: \(error.localizedDescription, privacy: .public)")
+                return false
+            }
         }
     }
 
     private func persistIdentityBackupToKeychain(ironCore: IronCore?) {
         guard let ironCore else { return }
         do {
-            // TODO: Use a user-provided or keychain-derived passphrase instead of a placeholder.
-            let backup = try ironCore.exportIdentityBackup(passphrase: "SCMessenger-Backup-Placeholder")
+            let passphrase = getPlatformSecuredPassphrase()
+            let backup = try ironCore.exportIdentityBackup(passphrase: passphrase)
             writeIdentityBackupToKeychain(backup)
         } catch {
             logger.warning("Failed to persist identity backup payload: \(error.localizedDescription, privacy: .public)")
@@ -2436,8 +2472,8 @@ final class MeshRepository {
             maxRelayBudget: DefaultSettings.maxRelayBudget,
             batteryFloor: DefaultSettings.batteryFloor,
             bleEnabled: true,
-            wifiAwareEnabled: true,
-            wifiDirectEnabled: true,
+            wifiAwareEnabled: false,
+            wifiDirectEnabled: false,
             internetEnabled: true,
             discoveryMode: .normal,
             onionRouting: false,

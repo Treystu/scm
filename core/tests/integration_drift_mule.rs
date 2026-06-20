@@ -166,3 +166,17 @@ fn outbox_drift_single_ownership() {
     assert_eq!(drift.len(), 1);
     assert!(!outbox.remove("msg-ownership-1"));
 }
+
+#[test]
+fn test_run_maintenance_cycle_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().to_str().unwrap().to_string();
+    let core = scmessenger_core::IronCore::with_storage(path);
+    core.start().unwrap();
+
+    // Call run_maintenance_cycle with 50ms budget
+    let report = core.run_maintenance_cycle(50);
+    assert!(report.contains("budget_ms"));
+    assert!(report.contains("elapsed_ms"));
+    assert!(report.contains("work_done"));
+}

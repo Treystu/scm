@@ -41,8 +41,7 @@ import com.scmessenger.android.ui.settings.PowerSettingsScreen
  * Sets up the navigation graph and bottom navigation bar.
  */
 @Composable
-fun MeshApp() {
-    val mainViewModel: MainViewModel = hiltViewModel()
+fun MeshApp(mainViewModel: MainViewModel = hiltViewModel()) {
     val hasIdentity by mainViewModel.hasIdentity.collectAsState()
     val showOnboarding by mainViewModel.showOnboarding.collectAsState()
     val isStorageLow by mainViewModel.isStorageLow.collectAsState()

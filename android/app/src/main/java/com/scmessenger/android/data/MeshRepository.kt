@@ -29,6 +29,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import timber.log.Timber
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import java.io.File
@@ -46,7 +48,10 @@ import java.io.File
  * All UniFFI objects are initialized lazily and managed here to ensure
  * proper lifecycle and resource cleanup.
  */
-open class MeshRepository(private val context: Context) {
+open class MeshRepository(
+    private val context: Context,
+    private val preferencesRepository: PreferencesRepository? = null
+) {
     private val storagePath = context.filesDir.absolutePath
     private val networkFailureMetrics = NetworkFailureMetrics()
     private val transportHealthMonitor = com.scmessenger.android.transport.TransportHealthMonitor()
@@ -3078,13 +3083,25 @@ open class MeshRepository(private val context: Context) {
         }
     }
 
+    private fun getPlatformSecuredPassphrase(): String {
+        val prefs = context.getSharedPreferences("platform_secure_keys", Context.MODE_PRIVATE)
+        var key = prefs.getString("backup_passphrase_v1", null)
+        if (key == null) {
+            val bytes = ByteArray(32)
+            java.security.SecureRandom().nextBytes(bytes)
+            key = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            prefs.edit().putString("backup_passphrase_v1", key).commit()
+        }
+        return key ?: ""
+    }
+
     private fun restoreIdentityFromBackup(core: uniffi.api.IronCore): Boolean {
         val backup = identityBackupPrefs.getString(IDENTITY_BACKUP_KEY, null)
         if (backup.isNullOrBlank()) {
             return false
         }
         return try {
-            core.importIdentityBackup(backup, "")
+            core.importIdentityBackup(backup, getPlatformSecuredPassphrase())
             Timber.i("Restored identity from Android backup payload")
             // P0_SHARED_IDENTITY: publish restored identity to all subscribers
             val restored = core.getIdentityInfo()
@@ -3095,7 +3112,20 @@ open class MeshRepository(private val context: Context) {
             true
         } catch (e: Exception) {
             Timber.w("Identity backup restore failed; fallback to new identity: ${e.message}")
-            false
+            // Fallback to empty string for compatibility with old backups if present
+            try {
+                core.importIdentityBackup(backup, "")
+                Timber.i("Restored identity using legacy empty passphrase fallback")
+                val restored = core.getIdentityInfo()
+                if (restored != null && restored.initialized) {
+                    cacheIdentityFields(restored)
+                }
+                publishIdentityInfo(restored)
+                true
+            } catch (fallbackEx: Exception) {
+                Timber.w("Legacy backup restore fallback also failed: ${fallbackEx.message}")
+                false
+            }
         }
     }
 
@@ -3105,8 +3135,14 @@ open class MeshRepository(private val context: Context) {
             Timber.w("restoreIdentityFromBackup: Core not initialized, skipping")
             return
         }
-        core.importIdentityBackup(backup, "")
-        Timber.i("Restored identity from manually pasted backup payload")
+        try {
+            core.importIdentityBackup(backup, getPlatformSecuredPassphrase())
+            Timber.i("Restored identity from manually pasted backup payload")
+        } catch (e: Exception) {
+            // Fallback for empty passphrase for legacy manually exported backups
+            core.importIdentityBackup(backup, "")
+            Timber.i("Restored identity from manually pasted backup payload using legacy fallback")
+        }
         // P0_SHARED_IDENTITY: publish the restored identity to all subscribers
         val restored = core.getIdentityInfo()
         if (restored != null && restored.initialized) {
@@ -3129,10 +3165,11 @@ open class MeshRepository(private val context: Context) {
         val activeCore = core ?: return
         try {
             progress(IdentityCreationEvent.PersistingToStorage, "Encrypting with XChaCha20-Poly1305…")
+            val passphrase = getPlatformSecuredPassphrase()
             val backup = if (customSalt != null) {
-                activeCore.exportIdentityBackupWithSalt("", customSalt)
+                activeCore.exportIdentityBackupWithSalt(passphrase, customSalt)
             } else {
-                activeCore.exportIdentityBackup("")
+                activeCore.exportIdentityBackup(passphrase)
             }
             // P0_ANDROID_010: Use commit() for synchronous write.
             // apply() is async and can lose the backup if the process is killed
@@ -3929,18 +3966,52 @@ open class MeshRepository(private val context: Context) {
         if (core != null) {
             val info = core.getIdentityInfo()
             if (info != null && info.initialized) {
-                cacheIdentityFields(info)
-                publishIdentityInfo(info)
-                return info
+                val resolvedInfo = if (info.nickname.isNullOrBlank()) {
+                    val cachedNickname = kotlinx.coroutines.runBlocking {
+                        try {
+                            preferencesRepository?.identityNickname?.firstOrNull()
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    if (!cachedNickname.isNullOrBlank()) {
+                        Timber.w("getIdentityInfoNonBlocking: Rust core nickname blank; using DataStore fallback: $cachedNickname")
+                        setNickname(cachedNickname)
+                        info.copy(nickname = cachedNickname)
+                    } else {
+                        info
+                    }
+                } else {
+                    info
+                }
+                cacheIdentityFields(resolvedInfo)
+                publishIdentityInfo(resolvedInfo)
+                return resolvedInfo
             }
             // Core exists but reports uninitialized (sled lost/corrupt).
             // Fall back to SharedPreferences cache — the identity was created
             // in a previous session and the backup is still valid.
             val cached = readCachedIdentityFields()
             if (cached != null && cached.initialized) {
+                val resolvedCached = if (cached.nickname.isNullOrBlank()) {
+                    val cachedNickname = kotlinx.coroutines.runBlocking {
+                        try {
+                            preferencesRepository?.identityNickname?.firstOrNull()
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                    if (!cachedNickname.isNullOrBlank()) {
+                        cached.copy(nickname = cachedNickname)
+                    } else {
+                        cached
+                    }
+                } else {
+                    cached
+                }
                 Timber.w("getIdentityInfoNonBlocking: core uninitialized but cache has identity; using cached")
-                publishIdentityInfo(cached)
-                return cached
+                publishIdentityInfo(resolvedCached)
+                return resolvedCached
             }
             // Neither core nor cache has identity
             publishIdentityInfo(info)
@@ -3950,10 +4021,26 @@ open class MeshRepository(private val context: Context) {
         // This eliminates the 30-60s "Unavailable" gap during service startup.
         val cached = readCachedIdentityFields()
         if (cached != null) {
+            val resolvedCached = if (cached.nickname.isNullOrBlank()) {
+                val cachedNickname = kotlinx.coroutines.runBlocking {
+                    try {
+                        preferencesRepository?.identityNickname?.firstOrNull()
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                if (!cachedNickname.isNullOrBlank()) {
+                    cached.copy(nickname = cachedNickname)
+                } else {
+                    cached
+                }
+            } else {
+                cached
+            }
             Timber.d("getIdentityInfoNonBlocking: using cached identity (core not ready)")
             // P0_SHARED_IDENTITY: also publish cached identity so subscribers see it
-            publishIdentityInfo(cached)
-            return cached
+            publishIdentityInfo(resolvedCached)
+            return resolvedCached
         }
         // Last resort: only return null if there's truly no core available and no cache.
         val state = meshService?.getState()
@@ -3977,16 +4064,50 @@ open class MeshRepository(private val context: Context) {
         )
         // P0: Cache identity fields for instant UI load on next startup
         if (result != null && result.initialized) {
-            cacheIdentityFields(result)
-            publishIdentityInfo(result)
-            return result
+            val resolvedResult = if (result.nickname.isNullOrBlank()) {
+                val cachedNickname = kotlinx.coroutines.runBlocking {
+                    try {
+                        preferencesRepository?.identityNickname?.firstOrNull()
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                if (!cachedNickname.isNullOrBlank()) {
+                    Timber.w("getIdentityInfo: Rust core nickname blank; using DataStore fallback: $cachedNickname")
+                    setNickname(cachedNickname)
+                    result.copy(nickname = cachedNickname)
+                } else {
+                    result
+                }
+            } else {
+                result
+            }
+            cacheIdentityFields(resolvedResult)
+            publishIdentityInfo(resolvedResult)
+            return resolvedResult
         }
         // Core returned uninitialized — fall back to SharedPreferences cache
         val cached = readCachedIdentityFields()
         if (cached != null && cached.initialized) {
+            val resolvedCached = if (cached.nickname.isNullOrBlank()) {
+                val cachedNickname = kotlinx.coroutines.runBlocking {
+                    try {
+                        preferencesRepository?.identityNickname?.firstOrNull()
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                if (!cachedNickname.isNullOrBlank()) {
+                    cached.copy(nickname = cachedNickname)
+                } else {
+                    cached
+                }
+            } else {
+                cached
+            }
             Timber.w("getIdentityInfo: core uninitialized but cache has identity; using cached")
-            publishIdentityInfo(cached)
-            return cached
+            publishIdentityInfo(resolvedCached)
+            return resolvedCached
         }
         // P0_SHARED_IDENTITY: publish to all subscribers
         publishIdentityInfo(result)
@@ -4055,11 +4176,15 @@ open class MeshRepository(private val context: Context) {
      * We read this directly from the SharedPreferences backup file that DataStore creates.
      */
     fun syncNicknameFromDatastore() {
-        // Read the nickname from the DataStore backup file
-        // DataStore stores preferences in a protobuf file, but also maintains
-        // a SharedPreferences backup file at "app_preferences.xml"
-        val prefs = context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE)
-        val cachedNickname = prefs.getString("identity_nickname", null)
+        // Read the nickname from the PreferencesRepository (DataStore fallback)
+        val cachedNickname = kotlinx.coroutines.runBlocking {
+            try {
+                preferencesRepository?.identityNickname?.firstOrNull()
+            } catch (e: Exception) {
+                Timber.e(e, "syncNicknameFromDatastore: Failed to read from preferencesRepository")
+                null
+            }
+        }
 
         if (cachedNickname.isNullOrBlank()) {
             Timber.d("syncNicknameFromDatastore: No nickname in DataStore")
@@ -4699,8 +4824,8 @@ open class MeshRepository(private val context: Context) {
                     maxRelayBudget = 200u,
                     batteryFloor = 20u,
                     bleEnabled = true,
-                    wifiAwareEnabled = true,
-                    wifiDirectEnabled = true,
+                    wifiAwareEnabled = false,
+                    wifiDirectEnabled = false,
                     internetEnabled = true,
                     discoveryMode = uniffi.api.DiscoveryMode.NORMAL,
                     onionRouting = false,
@@ -5329,8 +5454,8 @@ open class MeshRepository(private val context: Context) {
                 maxRelayBudget = 200u,
                 batteryFloor = 20u,
                 bleEnabled = true,
-                wifiAwareEnabled = true,
-                wifiDirectEnabled = true,
+                wifiAwareEnabled = false,
+                wifiDirectEnabled = false,
                 internetEnabled = true,
                 discoveryMode = uniffi.api.DiscoveryMode.NORMAL,
                 onionRouting = false,

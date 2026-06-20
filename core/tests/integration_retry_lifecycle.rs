@@ -61,3 +61,29 @@ fn undelivered_message_does_not_transition_to_terminal_drop() {
     assert_eq!(queued[0].message_id, "msg-undelivered");
     assert_eq!(queued[0].attempts, u32::MAX);
 }
+
+#[test]
+fn test_custody_ownership_mutual_exclusion() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir
+        .path()
+        .join("retry_outbox")
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let backend = std::sync::Arc::new(SledStorage::new(&path).unwrap());
+    let mut outbox = Outbox::persistent(backend);
+    
+    // Message is enqueued initially
+    outbox.enqueue(make_msg("msg-custody", "peer-a", 0)).unwrap();
+    let queued = outbox.peek_for_peer("peer-a");
+    assert_eq!(queued.len(), 1);
+    
+    // When moved to Drift custody (StoreAndCarry), it is removed from the outbox queue
+    let removed = outbox.remove("msg-custody");
+    assert!(removed);
+    
+    let queued = outbox.peek_for_peer("peer-a");
+    assert_eq!(queued.len(), 0);
+}
