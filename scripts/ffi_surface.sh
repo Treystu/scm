@@ -33,7 +33,7 @@ extract_swift_symbols() {
         echo "WARN: Swift bindings not found at $swift_file" >&2
         return 1
     fi
-    grep -E '^\s*(public func |public class |public protocol |public enum |public struct |public typealias |open class )' "$swift_file" | \
+    grep -E '^\s*(public func |public class |public protocol |public enum |public struct |public typealias |open class |open func )' "$swift_file" | \
         sed 's/^\s*//' | sort
 }
 

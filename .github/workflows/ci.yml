@@ -53,4 +53,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --bin gen_kotlin --features gen-bindings
+      - run: cargo run --bin gen_swift --features gen-bindings
       - run: scripts/ffi_surface.sh
