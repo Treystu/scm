@@ -22,6 +22,26 @@
 - Aware sessions die on Wi-Fi toggle/Doze: `on_network_changed` (existing PlatformBridge callback) must tear down `DataPathActive` state
 
 ## Verification
-- [ ] `cargo test -p scmessenger-core wifi_aware` (existing 15 tests still pass)
-- [ ] New integration test with `MockWifiAwareBridge` proving: discovery event -> `create_data_path` -> dial issued to `SwarmHandle` (assert via command-channel inspection)
+- [x] `cargo test -p scmessenger-core wifi_aware` (existing 15 tests still pass)
+- [x] New integration test with `MockWifiAwareBridge` proving: discovery event -> `create_data_path` -> dial issued to `SwarmHandle` (asserted via real mutual `get_peers()` connectivity on both swarms, mDNS disabled so only the deliberate dial can connect them)
 - [ ] Kotlin unit test (Robolectric) for permission-gated availability
+
+## Update (2026-07-01)
+Adding real assertions to `integration_wifi_aware.rs` exposed two genuine
+bugs that made the discovery->dial path silently non-functional:
+1. `on_wifi_aware_peer_discovered`'s spawned task called the sync
+   `SwarmBridge::dial()` (which does `rt.block_on`) from within an
+   already-running tokio task — a guaranteed "Cannot start a runtime from
+   within a runtime" panic on every real discovery event, swallowed because
+   the task's `JoinHandle` was never awaited.
+2. The confirmation channel used a blocking `std::sync::mpsc::Receiver::
+   recv_timeout()` inside an async fn, which could starve the shared tokio
+   runtime under concurrent discovery.
+
+Fixed both: added `SwarmBridge::dial_async` (used from
+`on_wifi_aware_peer_discovered` and `on_wifi_direct_connection_info`'s
+spawned tasks instead of the sync `dial()`), and switched
+`PlatformWifiAwareBridge`'s data-path channel to `tokio::sync::oneshot`
+with `tokio::time::timeout`. The test now enables `wifi_aware_enabled`
+(off by default) and runs a second real libp2p swarm with mDNS disabled
+so the assertion can only pass via the deliberate dial path.
