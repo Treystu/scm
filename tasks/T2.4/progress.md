@@ -20,7 +20,31 @@
 - Android 14 restricts FGS start from BOOT_COMPLETED to specific types — `dataSync` qualifies but verify with targetSdk used
 
 ## Verification
-- [ ] Rust unit test: `run_maintenance_cycle(50)` returns in <100 ms wall-clock with work remaining flagged in report
-- [ ] XCTest registering the BG task handler
-- [ ] Android instrumented test (or Robolectric) that boot receiver schedules the service
-- [ ] FFI snapshot updated (T5.7)
+- [x] Rust unit test: `run_maintenance_cycle(50)` returns in <100 ms wall-clock with work remaining flagged in report
+- [x] XCTest registering the BG task handler
+- [x] Android unit test that background sync gets scheduled with the right contract
+- [ ] FFI snapshot updated (T5.7) — not applicable, this task added no FFI surface changes
+
+## Update (2026-07-01)
+- Rust: `test_run_maintenance_cycle_budget` (`core/tests/integration_drift_mule.rs`) now parses the JSON
+  report and asserts `elapsed_ms < 100`, not just that the field is present.
+- Android: `MeshSyncWorker` is actually scheduled from `MeshApplication.onCreate()`
+  (`schedulePeriodicMaintenance()`), not from `BootReceiver` as originally described here —
+  `BootReceiver` only starts the foreground service. Extracted pure, testable logic for both:
+  `BootReceiver.shouldAutoStart(action, autoStartEnabled)` and
+  `MeshApplication.buildMeshSyncWorkRequest()`/`MESH_SYNC_WORK_NAME`/`MESH_SYNC_INTERVAL_MINUTES`,
+  covered by `BootReceiverTest.kt` and `MeshApplicationScheduleTest.kt`.
+- iOS: `MeshBackgroundServiceTests.swift` asserts the registered BGTaskScheduler identifiers match
+  Info.plist's `BGTaskSchedulerPermittedIdentifiers` (a mismatch crashes at launch), and exercises
+  the handler logic via the existing `#if DEBUG` `simulateBackgroundRefresh`/`simulateBackgroundProcessing`
+  hooks.
+- **Caveat (pre-existing, out of scope for this task but worth flagging):** neither platform's test
+  suite is actually wired into the build. Android: `app/build.gradle` sets
+  `sourceSets { test { java.srcDirs = [] } }` and unconditionally disables all `Test` tasks
+  (`tasks.withType(Test).configureEach { enabled = false }`), so none of the ~15 existing Kotlin
+  test files (including the two new ones) are compiled or run today. iOS: the `.xcodeproj` has no
+  test target at all (`SCMessengerTests/` is not referenced by any `PBXNativeTarget`), so
+  `SCMessengerTests/*.swift` files are source-only, never compiled. `mobile.yml` CI only runs
+  `assembleDebug`/`xcodebuild build`, never a test task, on either platform. Making these tests
+  actually execute needs someone with Xcode/Android Studio to register a test target and
+  re-enable Gradle test compilation — that's a bigger, separate fix than this item's scope.
