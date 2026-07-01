@@ -57,6 +57,16 @@ impl Contact {
     }
 }
 
+/// Key prefix namespacing contact records in the shared backend. `IronCore`
+/// hands identity, history, logs, blocked-list, and contact storage the same
+/// `Arc<dyn StorageBackend>` instance, so without a prefix, `list()`/`count()`
+/// would scan (and try to parse as `Contact`) every other subsystem's keys too.
+const CONTACT_KEY_PREFIX: &[u8] = b"contact:";
+
+fn contact_key(peer_id: &str) -> Vec<u8> {
+    [CONTACT_KEY_PREFIX, peer_id.as_bytes()].concat()
+}
+
 #[derive(Clone)]
 pub struct ContactManager {
     backend: Arc<dyn StorageBackend>,
@@ -133,19 +143,19 @@ impl ContactManager {
     }
 
     pub fn add(&self, contact: Contact) -> Result<(), IronCoreError> {
-        let key = contact.peer_id.clone();
+        let key = contact_key(&contact.peer_id);
         let value = serde_json::to_vec(&contact).map_err(|_| IronCoreError::Internal)?;
         self.backend
-            .put(key.as_bytes(), &value)
+            .put(&key, &value)
             .map_err(|_| IronCoreError::StorageError)?;
         Ok(())
     }
 
     pub fn get(&self, peer_id: String) -> Result<Option<Contact>, IronCoreError> {
-        let key = peer_id;
+        let key = contact_key(&peer_id);
         if let Some(data) = self
             .backend
-            .get(key.as_bytes())
+            .get(&key)
             .map_err(|_| IronCoreError::StorageError)?
         {
             let contact: Contact =
@@ -157,9 +167,9 @@ impl ContactManager {
     }
 
     pub fn remove(&self, peer_id: String) -> Result<(), IronCoreError> {
-        let key = peer_id;
+        let key = contact_key(&peer_id);
         self.backend
-            .remove(key.as_bytes())
+            .remove(&key)
             .map_err(|_| IronCoreError::StorageError)?;
         Ok(())
     }
@@ -167,7 +177,7 @@ impl ContactManager {
     pub fn list(&self) -> Result<Vec<Contact>, IronCoreError> {
         let all = self
             .backend
-            .scan_prefix(b"")
+            .scan_prefix(CONTACT_KEY_PREFIX)
             .map_err(|_| IronCoreError::StorageError)?;
 
         let mut contacts = Vec::new();
@@ -275,7 +285,9 @@ impl ContactManager {
     }
 
     pub fn count(&self) -> u32 {
-        self.backend.count_prefix(b"").unwrap_or(0) as u32
+        self.backend
+            .count_prefix(CONTACT_KEY_PREFIX)
+            .unwrap_or(0) as u32
     }
 
     pub fn flush(&self) {
@@ -283,20 +295,23 @@ impl ContactManager {
     }
 
     /// Verify database integrity and detect corruption.
-    /// Returns an error if the database has data but returns 0 contacts.
+    /// Returns an error if the database has contact-prefixed entries but
+    /// `list()` returns 0 contacts (i.e. entries exist but fail to parse).
     pub fn verify_integrity(&self) -> Result<(), IronCoreError> {
         let contact_count = self.count();
-        let db_size = self.backend.count_prefix(b"").unwrap_or(0);
+        let raw_entry_count = self.backend.count_prefix(CONTACT_KEY_PREFIX).unwrap_or(0);
 
-        // If contact count is 0 but database has entries, there may be corruption
-        // or the contacts were not properly loaded from the database.
-        // We use a threshold of 1024 bytes as a reasonable indicator of data presence.
-        if contact_count == 0 && db_size > 0 {
-            // Check if we have actual data by scanning a few keys
-            let has_data = !self.backend.scan_prefix(b"").unwrap_or_default().is_empty();
+        // If contact count is 0 but contact-prefixed entries exist, there may
+        // be corruption or the contacts were not properly loaded.
+        if contact_count == 0 && raw_entry_count > 0 {
+            let has_data = !self
+                .backend
+                .scan_prefix(CONTACT_KEY_PREFIX)
+                .unwrap_or_default()
+                .is_empty();
             if has_data {
-                // Database has data but count() returns 0 - potential corruption
-                // This could happen if the data is stored but not properly deserialized
+                // Contact-prefixed entries exist but count() returns 0 -
+                // potential corruption (data stored but not properly deserialized).
                 return Err(IronCoreError::CorruptionDetected);
             }
         }

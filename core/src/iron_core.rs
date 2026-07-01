@@ -35,7 +35,7 @@ use crate::store::backend::SledStorage;
 use crate::store::blocked::BlockedManager as CoreBlockedManager;
 use crate::store::logs::LogManager;
 use crate::store::{
-    ContactManager as CoreContactManager, HistoryManager as CoreHistoryManager, Inbox,
+    Contact, ContactManager as CoreContactManager, HistoryManager as CoreHistoryManager, Inbox,
     MessageDirection, MessageRecord, Outbox, QueuedMessage, ReceivedMessage, RelayCustodyStore,
     StorageBackend, StorageManager,
 };
@@ -207,6 +207,24 @@ pub struct IronCore {
 
     /// Drift policy engine — adapts relay aggressiveness from device state.
     policy_engine: Arc<RwLock<crate::drift::PolicyEngine>>,
+}
+
+/// Current version of the structured identity-backup payload (the plaintext
+/// encrypted by `export_identity_backup*`). Bumping this is safe: older
+/// payload shapes stay decodable as long as `import_identity_backup` keeps a
+/// fallback for them.
+const IDENTITY_BACKUP_PAYLOAD_VERSION: u32 = 2;
+
+/// Plaintext payload encrypted inside an identity backup blob: the identity
+/// keypair plus enough conversational state (ratchet sessions, contacts) to
+/// keep messaging without interruption after a restore on a fresh device.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IdentityBackupPayload {
+    version: u32,
+    identity_key_hex: String,
+    ratchet_sessions_json: Option<String>,
+    #[serde(default)]
+    contacts: Vec<Contact>,
 }
 
 impl Default for IronCore {
@@ -1216,13 +1234,38 @@ impl IronCore {
     // Identity backup export/import
     // -----------------------------------------------------------------------
 
-    pub fn export_identity_backup(&self, passphrase: String) -> Result<String, IronCoreError> {
+    /// Build the JSON payload backed up by `export_identity_backup*`: the
+    /// identity keypair plus everything needed to keep conversing without
+    /// interruption after a restore — active ratchet sessions (so the next
+    /// message from an existing contact still decrypts) and contacts.
+    fn build_identity_backup_payload(&self) -> Result<String, IronCoreError> {
         let identity = self.identity.read();
         let keys = identity.keys().ok_or(IronCoreError::NotInitialized)?;
-        let key_bytes = keys.to_bytes();
-        let payload = hex::encode(&key_bytes);
-        crate::crypto::backup::encrypt_backup(&payload, &passphrase, None)
-            .map_err(|_| IronCoreError::CryptoError)
+        let identity_key_hex = hex::encode(keys.to_bytes());
+
+        let ratchet_sessions_json = self.ratchet_sessions.read().serialize_sessions().ok();
+        let contacts = self.contact_manager.read().list().unwrap_or_default();
+
+        let payload = IdentityBackupPayload {
+            version: IDENTITY_BACKUP_PAYLOAD_VERSION,
+            identity_key_hex,
+            ratchet_sessions_json,
+            contacts,
+        };
+        serde_json::to_string(&payload).map_err(|_| IronCoreError::Internal)
+    }
+
+    pub fn export_identity_backup(&self, passphrase: String) -> Result<String, IronCoreError> {
+        let payload = self.build_identity_backup_payload()?;
+        let backup = crate::crypto::backup::encrypt_backup(&payload, &passphrase, None)
+            .map_err(|_| IronCoreError::CryptoError)?;
+        self.audit_log.write().append(
+            AuditEventType::BackupExported,
+            self.identity.read().identity_id(),
+            None,
+            None,
+        );
+        Ok(backup)
     }
 
     pub fn export_identity_backup_with_salt(
@@ -1230,10 +1273,7 @@ impl IronCore {
         passphrase: String,
         salt: Option<Vec<u8>>,
     ) -> Result<String, IronCoreError> {
-        let identity = self.identity.read();
-        let keys = identity.keys().ok_or(IronCoreError::NotInitialized)?;
-        let key_bytes = keys.to_bytes();
-        let payload = hex::encode(&key_bytes);
+        let payload = self.build_identity_backup_payload()?;
 
         let salt_array = match salt {
             Some(s) => {
@@ -1247,10 +1287,22 @@ impl IronCore {
             None => None,
         };
 
-        crate::crypto::backup::encrypt_backup(&payload, &passphrase, salt_array.as_ref())
-            .map_err(|_| IronCoreError::CryptoError)
+        let backup =
+            crate::crypto::backup::encrypt_backup(&payload, &passphrase, salt_array.as_ref())
+                .map_err(|_| IronCoreError::CryptoError)?;
+        self.audit_log.write().append(
+            AuditEventType::BackupExported,
+            self.identity.read().identity_id(),
+            None,
+            None,
+        );
+        Ok(backup)
     }
 
+    /// Import an identity backup. Validates the entire payload (identity
+    /// key bytes, ratchet session JSON, contact records) before writing
+    /// anything, so a malformed or partially-tampered payload can't leave
+    /// identity/ratchet-sessions/contacts in a mix of old and new state.
     pub fn import_identity_backup(
         &self,
         backup: String,
@@ -1258,11 +1310,50 @@ impl IronCore {
     ) -> Result<(), IronCoreError> {
         let payload = crate::crypto::backup::decrypt_backup(&backup, &passphrase)
             .map_err(|_| IronCoreError::CryptoError)?;
-        let key_bytes = hex::decode(&payload).map_err(|_| IronCoreError::CryptoError)?;
+
+        // Try the current structured payload first; fall back to the
+        // original format (a bare hex-encoded identity key, no ratchet
+        // sessions or contacts) for backups exported before this payload
+        // existed.
+        let (key_bytes, ratchet_sessions_json, contacts) =
+            match serde_json::from_str::<IdentityBackupPayload>(&payload) {
+                Ok(parsed) => {
+                    let key_bytes = hex::decode(&parsed.identity_key_hex)
+                        .map_err(|_| IronCoreError::CryptoError)?;
+                    // Validate (without applying) the ratchet session JSON
+                    // up front, so a corrupt fragment fails before any state
+                    // is touched.
+                    if let Some(ref json) = parsed.ratchet_sessions_json {
+                        let mut probe = RatchetSessionManager::new();
+                        probe
+                            .deserialize_sessions(json)
+                            .map_err(|_| IronCoreError::CorruptionDetected)?;
+                    }
+                    (key_bytes, parsed.ratchet_sessions_json, parsed.contacts)
+                }
+                Err(_) => {
+                    let key_bytes =
+                        hex::decode(&payload).map_err(|_| IronCoreError::CryptoError)?;
+                    (key_bytes, None, Vec::new())
+                }
+            };
+
+        // Everything validated - commit.
         let mut identity = self.identity.write();
         identity
             .import_key_bytes(&key_bytes)
             .map_err(|_| IronCoreError::CryptoError)?;
+
+        if let Some(json) = ratchet_sessions_json {
+            let _ = self.ratchet_sessions.write().deserialize_sessions(&json);
+        }
+        {
+            let contact_manager = self.contact_manager.read();
+            for contact in contacts {
+                let _ = contact_manager.add(contact);
+            }
+        }
+
         self.audit_log.write().append(
             AuditEventType::BackupImported,
             identity.identity_id(),
@@ -2246,6 +2337,25 @@ impl IronCore {
             .peek_for_peer(recipient_id)
             .iter()
             .any(|m| m.message_id == message_id)
+    }
+
+    /// Test-only: direct access to the ratchet session manager, so
+    /// integration tests can establish a session and verify it survives
+    /// identity backup/restore end-to-end (see T4.5).
+    pub fn ratchet_sessions_handle(&self) -> Arc<RwLock<RatchetSessionManager>> {
+        self.ratchet_sessions.clone()
+    }
+
+    /// Test-only: the initialized identity's Ed25519 signing key, for tests
+    /// that drive `crypto::ratchet`/`crypto::encrypt` functions directly
+    /// (see T4.5). Panics if the identity hasn't been initialized.
+    pub fn identity_signing_key_for_test(&self) -> ed25519_dalek::SigningKey {
+        self.identity
+            .read()
+            .keys()
+            .expect("identity must be initialized")
+            .signing_key
+            .clone()
     }
 
     /// Test-only: true if `message_id` (a UUID string, as returned by
