@@ -1332,7 +1332,7 @@ impl MeshService {
                         } else {
                             format!("/ip4/{}/tcp/{}", path_info.ip_address, path_info.port)
                         };
-                        let _ = swarm_bridge.dial(multiaddr_str);
+                        let _ = swarm_bridge.dial_async(multiaddr_str).await;
                     }
                 }
             });
@@ -1398,7 +1398,7 @@ impl MeshService {
             let rt = swarm_bridge.get_runtime_handle();
             rt.spawn(async move {
                 let multiaddr_str = format!("/ip4/{}/tcp/9001", group_owner_ip);
-                let _ = swarm_bridge.dial(multiaddr_str);
+                let _ = swarm_bridge.dial_async(multiaddr_str).await;
             });
         }
     }
@@ -1782,7 +1782,7 @@ pub trait WifiAwareCallback: Send + Sync {
 pub struct PlatformWifiAwareBridge {
     platform_bridge: std::sync::Arc<Mutex<Option<Box<dyn PlatformBridge>>>>,
     discovered_peers: Arc<Mutex<HashMap<String, (Vec<u8>, i32)>>>,
-    data_path_results: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<std::net::SocketAddr>>>>,
+    data_path_results: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<std::net::SocketAddr>>>>,
     on_service_discovered: Arc<Mutex<Option<Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>>>>,
 }
 
@@ -1885,7 +1885,7 @@ impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
         peer_id: &str,
         pmk: &[u8; 32],
     ) -> Result<std::net::SocketAddr, WifiAwareError> {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = tokio::sync::oneshot::channel();
         self.data_path_results
             .lock()
             .insert(peer_id.to_string(), tx);
@@ -1901,11 +1901,17 @@ impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
             ));
         }
 
-        rx.recv_timeout(std::time::Duration::from_secs(30))
+        // Await (not block) the confirmation: this runs on a shared tokio
+        // worker thread, and a blocking wait here would starve other tasks
+        // (including the swarm's own event loop) whenever multiple peers are
+        // discovered concurrently.
+        tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+            .await
             .map_err(|_| {
                 self.data_path_results.lock().remove(peer_id);
                 WifiAwareError::DataPathFailed("Data path confirmation timed out".into())
-            })
+            })?
+            .map_err(|_| WifiAwareError::DataPathFailed("Confirmation sender dropped".into()))
     }
 
     async fn close_data_path(&self, _peer_id: &str) -> Result<(), WifiAwareError> {
@@ -2937,6 +2943,11 @@ impl SwarmBridge {
     }
 
     /// Dial a peer at a multiaddress.
+    ///
+    /// For FFI/sync callers only. Calling this from within an already-running
+    /// tokio task (e.g. a `rt.spawn`'d future) panics ("Cannot start a
+    /// runtime from within a runtime") because it blocks on the same
+    /// runtime that's driving the caller — use `dial_async` there instead.
     pub fn dial(&self, multiaddr: String) -> Result<(), crate::IronCoreError> {
         let handle = self
             .handle
@@ -2949,6 +2960,27 @@ impl SwarmBridge {
 
         let rt = self.get_runtime_handle();
         rt.block_on(handle.dial(addr))
+            .map_err(|_| crate::IronCoreError::NetworkError)
+    }
+
+    /// Dial a peer at a multiaddress from within an already-running async
+    /// context (e.g. a task spawned to react to a proximity-transport
+    /// discovery callback). Awaits the dial directly instead of blocking the
+    /// current worker thread on it, so it's safe to call from `rt.spawn`'d
+    /// futures where `dial` is not.
+    pub(crate) async fn dial_async(&self, multiaddr: String) -> Result<(), crate::IronCoreError> {
+        let handle = self
+            .handle
+            .lock()
+            .clone()
+            .ok_or(crate::IronCoreError::NetworkError)?;
+
+        let addr =
+            Multiaddr::from_str(&multiaddr).map_err(|_| crate::IronCoreError::InvalidInput)?;
+
+        handle
+            .dial(addr)
+            .await
             .map_err(|_| crate::IronCoreError::NetworkError)
     }
 
