@@ -2237,6 +2237,28 @@ impl IronCore {
 
 // Non-FFI-safe methods moved to plain impl block to avoid uniffi::export compilation errors.
 impl IronCore {
+    /// Test-only: true if `message_id` is currently queued in the live
+    /// outbox for `recipient_id`. Used to assert single-ownership between
+    /// the active outbox and drift custody (see T2.5).
+    pub fn outbox_contains_for_recipient(&self, recipient_id: &str, message_id: &str) -> bool {
+        self.outbox
+            .read()
+            .peek_for_peer(recipient_id)
+            .iter()
+            .any(|m| m.message_id == message_id)
+    }
+
+    /// Test-only: true if `message_id` (a UUID string, as returned by
+    /// `prepare_message`) is currently held in drift custody. Used to assert
+    /// single-ownership between the active outbox and drift custody (see
+    /// T2.5).
+    pub fn drift_contains(&self, message_id: &str) -> bool {
+        match uuid::Uuid::parse_str(message_id) {
+            Ok(uuid) => self.drift_store.read().contains(uuid.as_bytes()),
+            Err(_) => false,
+        }
+    }
+
     /// Compute a BLAKE3 hash of the given data.
     pub fn dspy_blake3_hash(&self, data: &[u8]) -> Vec<u8> {
         crate::dspy::signatures::blake3_hash(data).to_vec()
