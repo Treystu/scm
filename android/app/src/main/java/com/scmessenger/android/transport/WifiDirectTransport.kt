@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.p2p.*
+import android.os.BatteryManager
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceRequest
 import androidx.core.content.IntentCompat
@@ -255,7 +256,7 @@ class WifiDirectTransport(
         try {
             val config = WifiP2pConfig().apply {
                 deviceAddress = device.deviceAddress
-                groupOwnerIntent = 0 // We want to be client if possible
+                groupOwnerIntent = computeGroupOwnerIntent()
             }
 
             wifiP2pManager?.connect(channel, config, object : WifiP2pManager.ActionListener {
@@ -478,7 +479,7 @@ class WifiDirectTransport(
         try {
             val config = WifiP2pConfig().apply {
                 this.deviceAddress = deviceAddress
-                groupOwnerIntent = 0 // Prefer client
+                groupOwnerIntent = computeGroupOwnerIntent()
             }
             wifiP2pManager?.connect(channel, config, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
@@ -528,9 +529,42 @@ class WifiDirectTransport(
         scope.cancel()
     }
 
+    /**
+     * Compute the WiFi P2P group-owner-intent bid (0-15) from live battery
+     * state: a charging or well-charged device bids higher so it wins GO
+     * negotiation and becomes the relay point. Mirrors
+     * `compute_group_owner_intent` in `core/src/transport/wifi_direct.rs`.
+     */
+    private fun computeGroupOwnerIntent(): Int {
+        val batteryStatus = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+
+        val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val batteryPct = if (level >= 0 && scale > 0) {
+            ((level.toFloat() / scale.toFloat()) * 100).toInt()
+        } else {
+            100
+        }
+
+        val status = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+            status == BatteryManager.BATTERY_STATUS_FULL
+
+        return if (isCharging || batteryPct > 50) {
+            GROUP_OWNER_INTENT_PREFERRED
+        } else {
+            GROUP_OWNER_INTENT_CLIENT
+        }
+    }
+
     companion object {
         private const val SERVICE_NAME = "scmessenger"
         private const val SERVICE_TYPE = "_scmessenger._tcp"
         private const val P2P_PORT = 8888
+
+        // Android's groupOwnerIntent ranges 0-15; bid higher when charging or
+        // above 50% battery so this device is preferred as the relay point.
+        private const val GROUP_OWNER_INTENT_PREFERRED = 7
+        private const val GROUP_OWNER_INTENT_CLIENT = 0
     }
 }
