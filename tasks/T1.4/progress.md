@@ -21,7 +21,14 @@
 - GO negotiation needs user-visible system dialog on some OEMs for the first connection — document as known UX constraint; invitation-based reconnect avoids it
 
 ## Verification
-- [ ] Rust unit tests with a mock bridge (state machine, GO-intent computation from DeviceProfile)
+- [x] Rust unit tests with a mock bridge (state machine, GO-intent computation from DeviceProfile)
 - [ ] Two-device manual procedure in `docs/device-testing.md`
-- [ ] `cargo clippy` clean
-- [ ] FFI snapshot updated
+- [x] `cargo clippy` clean
+- [x] FFI snapshot updated (no FFI surface change; group-owner-intent stays Kotlin-local)
+
+## Update (2026-07-01)
+`groupOwnerIntent` in `WifiDirectTransport.kt` now computed from live battery
+state (`is_charging || battery_pct > 50` -> intent 7, else 0) instead of the
+hardcoded 0. Mirrored in `core/src/transport/wifi_direct.rs::compute_group_owner_intent`
+with unit tests covering both branches. Two-device manual test procedure still
+outstanding (hardware-dependent, out of scope for this pass).
