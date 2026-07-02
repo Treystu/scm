@@ -439,6 +439,51 @@ fn iron_core_import_tampered_backup_leaves_no_partial_state() {
     );
 }
 
+/// A backup whose ratchet-session JSON contains one structurally-valid but
+/// cryptographically corrupt entry (bad hex) must fail the whole import with
+/// CorruptionDetected, not silently drop that entry and report success -
+/// T3: `deserialize_sessions` used to skip bad entries instead of failing.
+#[test]
+fn iron_core_import_rejects_corrupted_ratchet_session_entry() {
+    let alice = IronCore::new();
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+    let identity_key_hex = hex::encode(alice.identity_signing_key_for_test().to_bytes());
+
+    let zero_hex = hex::encode([0u8; 32]);
+    let corrupted_sessions_json = format!(
+        r#"{{"peer-x":{{"our_dh_secret_hex":"not-hex","our_dh_public_hex":"{zero}","their_dh_public_hex":null,"root_key_hex":"{zero}","sending_chain":null,"receiving_chain":null,"dh_step_count":0,"initialized":false,"has_identity_secret":false,"identity_secret_hex":null}}}}"#,
+        zero = zero_hex
+    );
+
+    let payload = serde_json::json!({
+        "version": 2,
+        "identity_key_hex": identity_key_hex,
+        "ratchet_sessions_json": corrupted_sessions_json,
+        "contacts": []
+    })
+    .to_string();
+
+    let passphrase = "corrupted-session-test";
+    let backup = encrypt_backup(&payload, passphrase, None).expect("encrypt succeeds");
+
+    let fresh = IronCore::new();
+    let result = fresh.import_identity_backup(backup, passphrase.to_string());
+
+    assert!(
+        matches!(
+            result,
+            Err(scmessenger_core::IronCoreError::CorruptionDetected)
+        ),
+        "corrupted ratchet session entry must fail closed with CorruptionDetected, got {:?}",
+        result
+    );
+    assert!(
+        fresh.get_identity_info().public_key_hex.is_none(),
+        "identity must not be imported when ratchet session validation fails"
+    );
+}
+
 /// Export and import must each append exactly one audit event of the
 /// corresponding type - this was previously missing entirely on export.
 #[test]

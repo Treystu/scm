@@ -138,6 +138,10 @@ impl RatchetSessionManager {
 
     /// Deserialize sessions from JSON and merge into the manager.
     /// Existing sessions for the same peer_id are NOT overwritten.
+    /// Per-entry conversion failures are silently skipped; this is meant
+    /// for best-effort startup loads (`load()`). Use
+    /// `deserialize_sessions_strict` for contexts (e.g. backup import)
+    /// that must fail on any corrupted entry instead of dropping it.
     pub fn deserialize_sessions(&mut self, json: &str) -> Result<()> {
         let map: HashMap<String, SerializableRatchetSession> = serde_json::from_str(json)
             .map_err(|e| anyhow::anyhow!("Failed to deserialize ratchet sessions: {}", e))?;
@@ -149,6 +153,24 @@ impl RatchetSessionManager {
             if let Ok(session) = serializable.into_session() {
                 self.sessions.insert(peer_id, session);
             }
+        }
+        Ok(())
+    }
+
+    /// Like `deserialize_sessions`, but aborts on the first per-entry
+    /// conversion failure instead of skipping it. Use where a corrupted
+    /// entry must fail the whole operation, e.g. validating and restoring
+    /// a backup.
+    pub fn deserialize_sessions_strict(&mut self, json: &str) -> Result<()> {
+        let map: HashMap<String, SerializableRatchetSession> = serde_json::from_str(json)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize ratchet sessions: {}", e))?;
+
+        for (peer_id, serializable) in map {
+            if self.sessions.contains_key(&peer_id) {
+                continue; // Don't overwrite existing in-memory sessions
+            }
+            let session = serializable.into_session()?;
+            self.sessions.insert(peer_id, session);
         }
         Ok(())
     }
@@ -347,5 +369,38 @@ mod tests {
         manager2.load().unwrap();
         assert_eq!(manager2.session_count(), 1);
         assert!(manager2.get_session(peer_id).is_some());
+    }
+
+    #[test]
+    fn test_deserialize_sessions_strict_rejects_corrupted_entry() {
+        let mut manager = RatchetSessionManager::new();
+        let our_key = generate_signing_key();
+        let their_pub = X25519PublicKey::from([1u8; 32]);
+
+        manager
+            .get_or_create_session("peer-good", &our_key, &their_pub)
+            .unwrap();
+        let mut good_serializable: HashMap<String, SerializableRatchetSession> = manager
+            .sessions
+            .iter()
+            .map(|(k, v)| (k.clone(), SerializableRatchetSession::from_session(v)))
+            .collect();
+
+        // Corrupt the one entry's hex field so `into_session()` fails.
+        let mut corrupted = good_serializable.remove("peer-good").unwrap();
+        corrupted.our_dh_secret_hex = "not-hex".to_string();
+        let mut map = HashMap::new();
+        map.insert("peer-corrupted".to_string(), corrupted);
+        let json = serde_json::to_string(&map).unwrap();
+
+        // Lenient path: silently skips the corrupted entry.
+        let mut lenient = RatchetSessionManager::new();
+        lenient.deserialize_sessions(&json).unwrap();
+        assert_eq!(lenient.session_count(), 0);
+
+        // Strict path: fails instead of dropping the entry.
+        let mut strict = RatchetSessionManager::new();
+        assert!(strict.deserialize_sessions_strict(&json).is_err());
+        assert_eq!(strict.session_count(), 0);
     }
 }

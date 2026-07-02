@@ -1359,7 +1359,7 @@ impl IronCore {
                     if let Some(ref json) = parsed.ratchet_sessions_json {
                         let mut probe = RatchetSessionManager::new();
                         probe
-                            .deserialize_sessions(json)
+                            .deserialize_sessions_strict(json)
                             .map_err(|_| IronCoreError::CorruptionDetected)?;
                     }
                     (key_bytes, parsed.ratchet_sessions_json, parsed.contacts)
@@ -1378,7 +1378,10 @@ impl IronCore {
             .map_err(|_| IronCoreError::CryptoError)?;
 
         if let Some(json) = ratchet_sessions_json {
-            let _ = self.ratchet_sessions.write().deserialize_sessions(&json);
+            self.ratchet_sessions
+                .write()
+                .deserialize_sessions_strict(&json)
+                .map_err(|_| IronCoreError::CorruptionDetected)?;
         }
         {
             let contact_manager = self.contact_manager.read();
