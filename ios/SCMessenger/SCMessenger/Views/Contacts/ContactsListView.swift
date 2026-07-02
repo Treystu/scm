@@ -21,6 +21,7 @@ struct ContactsListView: View {
     @State private var pendingDeleteDisplayName: String = ""
     @State private var editingContact: Contact? = nil
     @State private var editNickname: String = ""
+    @State private var contactToVerify: Contact? = nil
 
     var body: some View {
         List {
@@ -61,6 +62,12 @@ struct ContactsListView: View {
                             editNickname = contact.localNickname ?? contact.nickname ?? ""
                         } label: {
                             Label("Edit Nickname", systemImage: "pencil")
+                        }
+
+                        Button {
+                            contactToVerify = contact
+                        } label: {
+                            Label("Verify Safety Number", systemImage: "checkmark.shield")
                         }
 
                         Button(role: .destructive) {
@@ -190,6 +197,14 @@ struct ContactsListView: View {
                 }
             }
         )
+        .sheet(isPresented: Binding(
+            get: { contactToVerify != nil },
+            set: { if !$0 { contactToVerify = nil } }
+        )) {
+            if let peerId = contactToVerify?.peerId, let viewModel {
+                VerifySafetyNumberSheet(peerId: peerId, viewModel: viewModel)
+            }
+        }
     }
 
     private func quickConnect(_ peer: NearbyPeer) {

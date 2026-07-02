@@ -2921,6 +2921,32 @@ final class MeshRepository {
         return contactManager.count()
     }
 
+    /// Mark a contact as verified after an out-of-band safety-number comparison.
+    func markContactVerified(peerId: String) throws {
+        guard let contactManager = contactManager else {
+            throw MeshError.notInitialized("ContactManager not initialized")
+        }
+        try contactManager.markVerified(peerId: peerId)
+        logger.info("✓ Contact marked verified: \(peerId)")
+    }
+
+    /// Clear a contact's verification status (e.g. after a key change).
+    func unverifyContact(peerId: String) throws {
+        guard let contactManager = contactManager else {
+            throw MeshError.notInitialized("ContactManager not initialized")
+        }
+        try contactManager.unverify(peerId: peerId)
+        logger.info("✓ Contact verification cleared: \(peerId)")
+    }
+
+    /// Compute the Signal-style safety number for comparing identities with
+    /// `theirPublicKeyHex` out-of-band. Returns nil if our own identity isn't
+    /// initialized yet.
+    func computeSafetyNumber(theirPublicKeyHex: String) -> String? {
+        guard let ourKey = getIdentityInfo()?.publicKeyHex else { return nil }
+        return safetyNumber(ourPubkeyHex: ourKey, theirPubkeyHex: theirPublicKeyHex)
+    }
+
     // MARK: - Message History
 
     func getConversation(peerId: String, limit: UInt32 = 100) throws -> [MessageRecord] {
