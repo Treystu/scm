@@ -55,18 +55,14 @@ final class MeshBackgroundServiceTests: XCTestCase {
     /// hook, since the real BGTaskScheduler launch path can't be driven
     /// directly from a unit test.
     func testSimulatedBackgroundRefreshCompletesWithoutThrowing() async {
-        backgroundService.simulateBackgroundRefresh()
-
-        // simulateBackgroundRefresh fires a detached Task internally; give it
-        // a moment to run before the test tears the repository down.
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        let task = backgroundService.simulateBackgroundRefresh()
+        await task.value
     }
 
     /// Exercises the same work the real BGProcessingTask handler performs
     /// (bulk sync + peer ledger update) via the debug-only simulation hook.
     func testSimulatedBackgroundProcessingCompletesWithoutThrowing() async {
-        backgroundService.simulateBackgroundProcessing()
-
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        let task = backgroundService.simulateBackgroundProcessing()
+        await task.value
     }
 }

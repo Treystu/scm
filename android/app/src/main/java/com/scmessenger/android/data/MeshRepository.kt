@@ -8358,10 +8358,7 @@ open class MeshRepository(
         val prioritizedAddresses = emptyList<String>()
 
         // Proactively probe known relay ports to deprioritize blocked addresses
-        val probeTargets = listOf(
-            "34.135.34.73" to 9001, "34.135.34.73" to 443,
-            "104.28.216.43" to 9010, "104.28.216.43" to 443
-        )
+        val probeTargets = emptyList<Pair<String, Int>>()
         val portProbeResults = networkDetector.probePorts(probeTargets)
 
         // Filter out circuit-breaker-blocked and throttle-blocked addresses,
@@ -8600,7 +8597,7 @@ open class MeshRepository(
 
     /** Extract port number from a libp2p multiaddr string. */
     private fun extractPortFromMultiaddr(multiaddr: String): Int? {
-        // e.g. "/ip4/34.135.34.73/tcp/9001/p2p/..." → 9001
+        // e.g. "/ip4/1.2.3.4/tcp/9001/p2p/..." → 9001
         // e.g. "/dns4/bootstrap.example.com/tcp/443/ws/p2p/..." → 443
         val portRegex = Regex("""/tcp/(\d+)""").find(multiaddr)
             ?: Regex("""/udp/(\d+)""").find(multiaddr)

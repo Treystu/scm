@@ -71,10 +71,7 @@ final class MeshRepository {
     /// Static fallback bootstrap node multiaddrs for NAT traversal and internet roaming.
     /// These are used only if env override and remote fetch both fail/are absent.
     /// Priority order: GCP relay (cloud) → OSX relay (home/local backup).
-    private static let staticBootstrapNodes: [String] = [
-        // AWS Relay (Stable backup)
-        "/ip4/34.135.34.73/tcp/9001/p2p/12D3KooWETatHYo4xt9aufXEEDce719fyMEB7KmXJga1SYVUikaw",
-    ]
+    private static let staticBootstrapNodes: [String] = []
 
     /// Resolved bootstrap nodes using the core BootstrapResolver.
     /// Priority: SC_BOOTSTRAP_NODES env var → remote URL → static fallback.

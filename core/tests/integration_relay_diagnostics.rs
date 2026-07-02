@@ -19,12 +19,12 @@ fn make_core() -> IronCore {
 /// Fallback relay addresses are static/env-derived and must be available
 /// immediately, without any live swarm wiring.
 #[test]
-fn get_fallback_relays_returns_real_addresses_by_default() {
+fn get_fallback_relays_returns_empty_by_default() {
     let core = make_core();
     let relays = core.get_fallback_relays();
     assert!(
-        !relays.is_empty(),
-        "fallback relays must include the default CORE_BOOTSTRAP_NODES"
+        relays.is_empty(),
+        "fallback relays must be empty by default without hardcoded nodes"
     );
 }
 
@@ -39,7 +39,7 @@ fn relay_stats_and_health_reflect_recorded_events() {
     assert!(core.get_all_relay_stats().is_empty());
     assert!(core.get_healthy_relays().is_empty());
 
-    let addr: Multiaddr = "/ip4/34.135.34.73/tcp/9001".parse().unwrap();
+    let addr: Multiaddr = "/ip4/1.2.3.4/tcp/9001".parse().unwrap();
     let peer_id = PeerId::random();
 
     {
