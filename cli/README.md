@@ -102,6 +102,22 @@ scmessenger-cli config bootstrap remove <multiaddr>
 scmessenger-cli config bootstrap list
 ```
 
+## Privileged Ports (Linux)
+
+Running as a public bootstrap/relay node with a cellular-friendly WebSocket
+fallback listener on port 443 requires binding a privileged (<1024) port,
+which normally needs root. Instead of running the whole process as root,
+grant just that one capability to the binary once after building:
+
+```bash
+# From repository root:
+cargo build --release -p scmessenger-cli
+scripts/setcap-cli.sh   # applies CAP_NET_BIND_SERVICE
+```
+
+This is unrelated to BLE: btleplug talks to BlueZ over D-Bus on Linux, so
+no special capabilities are needed for scanning/connecting over Bluetooth.
+
 ## Test
 
 ```bash
