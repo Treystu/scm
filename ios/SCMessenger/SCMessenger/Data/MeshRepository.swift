@@ -6194,6 +6194,31 @@ final class MeshRepository {
         return ironCore?.getIdentityInfo()
     }
 
+    /// Export a passphrase-encrypted identity backup: the identity signing
+    /// key, active ratchet sessions, and contacts, encrypted with an
+    /// Argon2id-derived key. Distinct from `getIdentityExportString()`,
+    /// which exports the public identity card with no encryption.
+    func exportIdentityBackup(passphrase: String) throws -> String {
+        guard let ironCore else {
+            throw MeshError.notInitialized("IronCore not initialized")
+        }
+        return try ironCore.exportIdentityBackup(passphrase: passphrase)
+    }
+
+    /// Import an identity backup using a passphrase the user supplied
+    /// directly (as opposed to the device-bound Keychain auto-backup
+    /// passphrase used internally by `restoreIdentityFromKeychain`). A
+    /// wrong passphrase surfaces as an error with no fallback.
+    func importIdentityBackup(backup: String, passphrase: String) throws {
+        guard let ironCore else {
+            throw MeshError.notInitialized("IronCore not initialized")
+        }
+        try ironCore.importIdentityBackup(backup: backup, passphrase: passphrase)
+        if ironCore.getIdentityInfo().initialized {
+            ironCore.grantConsent()
+        }
+    }
+
     func getIdentityExportString() -> String {
         guard let identity = getFullIdentityInfo() else { return "{}" }
         var listeners = normalizeOutboundListenerHints(getListeningAddresses())

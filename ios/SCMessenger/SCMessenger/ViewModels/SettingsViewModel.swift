@@ -63,6 +63,36 @@ final class SettingsViewModel {
         return repository?.getIdentityExportString() ?? "{}"
     }
 
+    // MARK: - Identity Backup (passphrase-encrypted)
+
+    var backupExportResult: Result<String, Error>?
+
+    /// Export a passphrase-encrypted identity backup (identity key + ratchet
+    /// sessions + contacts). Distinct from `getIdentityExportString()`, which
+    /// exports the public identity card with no encryption.
+    func exportIdentityBackup(passphrase: String) {
+        do {
+            let backup = try repository?.exportIdentityBackup(passphrase: passphrase) ?? ""
+            backupExportResult = .success(backup)
+        } catch {
+            backupExportResult = .failure(error)
+        }
+    }
+
+    func clearBackupExportResult() {
+        backupExportResult = nil
+    }
+
+    /// Import an identity backup using a user-supplied passphrase.
+    func importIdentityBackup(backup: String, passphrase: String) {
+        do {
+            try repository?.importIdentityBackup(backup: backup, passphrase: passphrase)
+            successMessage = "Identity restored successfully"
+        } catch {
+            self.error = "Failed to restore identity: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Settings Lifecycle
 
     func loadSettings() {

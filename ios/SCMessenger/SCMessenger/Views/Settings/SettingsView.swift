@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var showingIdentityQr = false
     @State private var showingResetConfirmation = false
     @State private var identitySetupError: String?
+    @State private var showingExportBackup = false
+    @State private var showingImportBackup = false
     let onIdentityChanged: () -> Void
 
     init(onIdentityChanged: @escaping () -> Void = {}) {
@@ -204,6 +206,18 @@ struct SettingsView: View {
                     } label: {
                         Label("Show Identity QR", systemImage: "qrcode")
                     }
+
+                    Button {
+                        showingExportBackup = true
+                    } label: {
+                        Label("Export Identity Backup", systemImage: "lock")
+                    }
+
+                    Button {
+                        showingImportBackup = true
+                    } label: {
+                        Label("Import Identity Backup", systemImage: "square.and.arrow.down")
+                    }
                 } else {
                     Text("Relay-only mode is active. Create an identity to enable Messages and Contacts.")
                         .font(Theme.bodySmall)
@@ -286,6 +300,16 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingIdentityQr) {
             IdentityQrSheet(payload: repository.getIdentityQrPayload())
+        }
+        .sheet(isPresented: $showingExportBackup) {
+            if let viewModel {
+                ExportIdentityBackupSheet(viewModel: viewModel)
+            }
+        }
+        .sheet(isPresented: $showingImportBackup) {
+            if let viewModel {
+                ImportIdentityBackupSheet(viewModel: viewModel)
+            }
         }
         .confirmationDialog(
             "Delete All Data & Reset App?",
