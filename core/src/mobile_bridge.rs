@@ -9,7 +9,9 @@ use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 
 use crate::settings::MeshSettings;
-use crate::transport::wifi_aware::{WifiAwareError, WifiAwarePlatformBridge, WifiAwareConfig, WifiAwareTransport};
+use crate::transport::wifi_aware::{
+    WifiAwareConfig, WifiAwareError, WifiAwarePlatformBridge, WifiAwareTransport,
+};
 use crate::transport::wifi_direct::{PlatformWifiDirectBridge, WifiDirectTransport};
 use crate::transport::SwarmHandle;
 
@@ -179,7 +181,8 @@ pub struct MeshService {
     wifi_aware_bridge: Arc<Mutex<Option<Arc<PlatformWifiAwareBridge>>>>,
     wifi_direct_bridge: Arc<Mutex<Option<Arc<PlatformWifiDirectBridge>>>>,
     wifi_aware_transport: Arc<Mutex<Option<Arc<crate::transport::wifi_aware::WifiAwareTransport>>>>,
-    wifi_direct_transport: Arc<Mutex<Option<Arc<crate::transport::wifi_direct::WifiDirectTransport>>>>,
+    wifi_direct_transport:
+        Arc<Mutex<Option<Arc<crate::transport::wifi_direct::WifiDirectTransport>>>>,
     /// Platform-provided delegate for decentralized protocol events (Phase 4).
     external_delegate: Arc<Mutex<Option<Box<dyn crate::CoreDelegate>>>>,
 }
@@ -1306,12 +1309,7 @@ impl MeshService {
         }
     }
 
-    pub fn on_wifi_aware_peer_discovered(
-        &self,
-        peer_id: String,
-        service_info: Vec<u8>,
-        rssi: i32,
-    ) {
+    pub fn on_wifi_aware_peer_discovered(&self, peer_id: String, service_info: Vec<u8>, rssi: i32) {
         if let Some(transport) = self.wifi_aware_transport.lock().as_ref() {
             transport.add_discovered_peer(peer_id.clone(), service_info.clone(), rssi);
         }
@@ -1403,18 +1401,41 @@ impl MeshService {
         }
     }
 
-    pub fn export_identity_backup(&self, passphrase: String) -> Result<String, crate::IronCoreError> {
-        let core = self.core.lock().clone().ok_or(crate::IronCoreError::NotInitialized)?;
+    pub fn export_identity_backup(
+        &self,
+        passphrase: String,
+    ) -> Result<String, crate::IronCoreError> {
+        let core = self
+            .core
+            .lock()
+            .clone()
+            .ok_or(crate::IronCoreError::NotInitialized)?;
         core.export_identity_backup(passphrase)
     }
 
-    pub fn export_identity_backup_with_salt(&self, passphrase: String, salt: Vec<u8>) -> Result<String, crate::IronCoreError> {
-        let core = self.core.lock().clone().ok_or(crate::IronCoreError::NotInitialized)?;
+    pub fn export_identity_backup_with_salt(
+        &self,
+        passphrase: String,
+        salt: Vec<u8>,
+    ) -> Result<String, crate::IronCoreError> {
+        let core = self
+            .core
+            .lock()
+            .clone()
+            .ok_or(crate::IronCoreError::NotInitialized)?;
         core.export_identity_backup_with_salt(passphrase, Some(salt))
     }
 
-    pub fn import_identity_backup(&self, backup: String, passphrase: String) -> Result<(), crate::IronCoreError> {
-        let core = self.core.lock().clone().ok_or(crate::IronCoreError::NotInitialized)?;
+    pub fn import_identity_backup(
+        &self,
+        backup: String,
+        passphrase: String,
+    ) -> Result<(), crate::IronCoreError> {
+        let core = self
+            .core
+            .lock()
+            .clone()
+            .ok_or(crate::IronCoreError::NotInitialized)?;
         core.import_identity_backup(backup, passphrase)
     }
 
@@ -1782,7 +1803,8 @@ pub trait WifiAwareCallback: Send + Sync {
 pub struct PlatformWifiAwareBridge {
     platform_bridge: std::sync::Arc<Mutex<Option<Box<dyn PlatformBridge>>>>,
     discovered_peers: Arc<Mutex<HashMap<String, (Vec<u8>, i32)>>>,
-    data_path_results: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<std::net::SocketAddr>>>>,
+    data_path_results:
+        Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<std::net::SocketAddr>>>>,
     on_service_discovered: Arc<Mutex<Option<Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>>>>,
 }
 
@@ -1933,10 +1955,7 @@ impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
         Ok(())
     }
 
-    fn set_on_service_discovered(
-        &self,
-        callback: Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>,
-    ) {
+    fn set_on_service_discovered(&self, callback: Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>) {
         *self.on_service_discovered.lock() = Some(callback);
     }
 
@@ -3190,9 +3209,15 @@ pub fn update_peer_transports(peer_id: String, transports: Vec<ProximityTranspor
                 .iter()
                 .map(|t| match t {
                     ProximityTransport::Ble => crate::transport::abstraction::TransportType::BLE,
-                    ProximityTransport::WifiAware => crate::transport::abstraction::TransportType::WiFiAware,
-                    ProximityTransport::WifiDirect => crate::transport::abstraction::TransportType::WiFiDirect,
-                    ProximityTransport::Multipeer => crate::transport::abstraction::TransportType::Internet,
+                    ProximityTransport::WifiAware => {
+                        crate::transport::abstraction::TransportType::WiFiAware
+                    }
+                    ProximityTransport::WifiDirect => {
+                        crate::transport::abstraction::TransportType::WiFiDirect
+                    }
+                    ProximityTransport::Multipeer => {
+                        crate::transport::abstraction::TransportType::Internet
+                    }
                 })
                 .collect();
             let engine = get_escalation_engine();

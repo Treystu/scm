@@ -105,16 +105,18 @@ fn test_custody_ownership_mutual_exclusion() {
 
     let backend = std::sync::Arc::new(SledStorage::new(&path).unwrap());
     let mut outbox = Outbox::persistent(backend);
-    
+
     // Message is enqueued initially
-    outbox.enqueue(make_msg("msg-custody", "peer-a", 0)).unwrap();
+    outbox
+        .enqueue(make_msg("msg-custody", "peer-a", 0))
+        .unwrap();
     let queued = outbox.peek_for_peer("peer-a");
     assert_eq!(queued.len(), 1);
-    
+
     // When moved to Drift custody (StoreAndCarry), it is removed from the outbox queue
     let removed = outbox.remove("msg-custody");
     assert!(removed);
-    
+
     let queued = outbox.peek_for_peer("peer-a");
     assert_eq!(queued.len(), 0);
 }

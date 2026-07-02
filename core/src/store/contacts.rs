@@ -285,9 +285,7 @@ impl ContactManager {
     }
 
     pub fn count(&self) -> u32 {
-        self.backend
-            .count_prefix(CONTACT_KEY_PREFIX)
-            .unwrap_or(0) as u32
+        self.backend.count_prefix(CONTACT_KEY_PREFIX).unwrap_or(0) as u32
     }
 
     pub fn flush(&self) {

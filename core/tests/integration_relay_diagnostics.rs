@@ -51,19 +51,20 @@ fn relay_stats_and_health_reflect_recorded_events() {
         // `record_success` only updates metrics for already-known relays;
         // a relay must first be registered (e.g. on discovery) before dial
         // results can be recorded against it.
-        mgr.relay_discovery_mut().update_relay_metrics(RelayMetrics {
-            peer_id,
-            addresses: vec![addr.clone()],
-            is_headless: false,
-            uptime_ratio: 0.5,
-            avg_latency_ms: 100,
-            bandwidth_estimate: 0,
-            recent_connections: 0,
-            recent_failures: 0,
-            last_seen: 0,
-            region: None,
-            stability_score: 0.5,
-        });
+        mgr.relay_discovery_mut()
+            .update_relay_metrics(RelayMetrics {
+                peer_id,
+                addresses: vec![addr.clone()],
+                is_headless: false,
+                uptime_ratio: 0.5,
+                avg_latency_ms: 100,
+                bandwidth_estimate: 0,
+                recent_connections: 0,
+                recent_failures: 0,
+                last_seen: 0,
+                region: None,
+                stability_score: 0.5,
+            });
         mgr.relay_discovery_mut().record_success(&peer_id, 42);
         mgr.circuit_breaker().record_success(&addr.to_string());
     }

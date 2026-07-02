@@ -13,16 +13,40 @@ impl PlatformBridge for MockBridge {
     fn on_entering_background(&self) {}
     fn on_entering_foreground(&self) {}
     fn send_ble_packet(&self, _peer_id: String, _data: Vec<u8>) {}
-    fn on_proximity_data_received(&self, _peer_id: String, _transport: ProximityTransport, _data: Vec<u8>) {}
-    fn send_proximity_packet(&self, _peer_id: String, _transport: ProximityTransport, _data: Vec<u8>) {}
-    fn wifi_aware_publish(&self, _service_name: String, _service_info: Vec<u8>) -> bool { true }
-    fn wifi_aware_subscribe(&self, _service_name: String) -> bool { true }
-    fn wifi_aware_create_data_path(&self, _peer_id: String, _pmk: Vec<u8>) -> bool { true }
+    fn on_proximity_data_received(
+        &self,
+        _peer_id: String,
+        _transport: ProximityTransport,
+        _data: Vec<u8>,
+    ) {
+    }
+    fn send_proximity_packet(
+        &self,
+        _peer_id: String,
+        _transport: ProximityTransport,
+        _data: Vec<u8>,
+    ) {
+    }
+    fn wifi_aware_publish(&self, _service_name: String, _service_info: Vec<u8>) -> bool {
+        true
+    }
+    fn wifi_aware_subscribe(&self, _service_name: String) -> bool {
+        true
+    }
+    fn wifi_aware_create_data_path(&self, _peer_id: String, _pmk: Vec<u8>) -> bool {
+        true
+    }
     fn wifi_aware_stop(&self) {}
-    fn wifi_direct_discover_peers(&self) -> bool { true }
+    fn wifi_direct_discover_peers(&self) -> bool {
+        true
+    }
     fn wifi_direct_stop_discovery(&self) {}
-    fn wifi_direct_connect(&self, _device_address: String) -> bool { true }
-    fn wifi_direct_create_group(&self, _group_name: String) -> bool { true }
+    fn wifi_direct_connect(&self, _device_address: String) -> bool {
+        true
+    }
+    fn wifi_direct_create_group(&self, _group_name: String) -> bool {
+        true
+    }
     fn wifi_direct_remove_group(&self) {}
 }
 
@@ -106,7 +130,9 @@ fn test_wifi_aware_peer_discovered_triggers_data_path_and_dial() {
             // same host, so with the default Open mode they'd find each
             // other on their own and the test would pass even if the
             // WiFi-Aware-triggered dial path were completely broken.
-            Some(transport::DiscoveryConfig::new(transport::DiscoveryMode::Silent)),
+            Some(transport::DiscoveryConfig::new(
+                transport::DiscoveryMode::Silent,
+            )),
             scmessenger_core::transport::default_routing_engine_handle(),
         )
         .await
@@ -130,7 +156,9 @@ fn test_wifi_aware_peer_discovered_triggers_data_path_and_dial() {
             responder_event_tx,
             None,
             false,
-            Some(transport::DiscoveryConfig::new(transport::DiscoveryMode::Silent)),
+            Some(transport::DiscoveryConfig::new(
+                transport::DiscoveryMode::Silent,
+            )),
             scmessenger_core::transport::default_routing_engine_handle(),
         )
         .await
@@ -153,11 +181,7 @@ fn test_wifi_aware_peer_discovered_triggers_data_path_and_dial() {
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut connected = false;
     while Instant::now() < deadline {
-        service.on_wifi_aware_peer_discovered(
-            responder_peer_id.to_string(),
-            vec![1, 2, 3],
-            -50,
-        );
+        service.on_wifi_aware_peer_discovered(responder_peer_id.to_string(), vec![1, 2, 3], -50);
         // Give the newly spawned task a chance to register its receiver.
         sleep(Duration::from_millis(50));
         service.on_wifi_aware_data_path_confirmed(

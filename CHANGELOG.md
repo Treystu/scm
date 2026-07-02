@@ -2,6 +2,39 @@
 
 All notable changes to SCMessenger will be documented in this file.
 
+## [Unreleased]
+
+### Corrected — accuracy of the 1.0.0-rc2 verification claims
+
+The "Verification" list under 1.0.0-rc2 below did not hold on the commit
+that added it (`0a49d32`), and no CI run has ever executed to back it (all
+GitHub Actions jobs since 2026-06-15 failed in 1–2 s without a runner being
+assigned — an account-level problem, see
+`docs/release-readiness-2026-07-02.md`):
+
+- `cargo fmt --check` — **failed** at `0a49d32` (13 diff sites) and on every
+  commit since, until fixed in this changeset.
+- `scripts/ffi_surface.sh` — **fails** on `main`: `gen_kotlin` panics unless
+  the cdylib is prebuilt, and the checked-in Kotlin snapshot is stale. (Both
+  are fixed by PR #1.) The script also exits 0 when bindings are absent, so
+  a "pass" without generated bindings was vacuous.
+- Android/iOS/WASM build claims — unverifiable (no CI logs exist).
+  Independently reproduced in this changeset's session: the WASM release
+  build **does** pass; Android/iOS remain unverified.
+- `cargo test --workspace --all-features`, `cargo clippy --workspace
+  --all-features -- -D warnings`, `cargo deny check
+  bans licenses sources` — independently re-verified **passing** on
+  `cd582f8` in this changeset's session (advisories check not run:
+  network-restricted environment).
+
+### Changed
+- Applied `cargo fmt` across `core/` (including CRLF→LF normalization of
+  `iron_core.rs`); `cargo fmt --check` is clean again.
+- Untracked committed Python bytecode under `cloud/orchestrator/` and added
+  `__pycache__/`/`*.py[cod]` to `.gitignore`.
+- Added `docs/release-readiness-2026-07-02.md`: evidence-based release
+  readiness assessment and ordered handoff task list.
+
 ## [1.0.0-rc2] — 2026-06-17
 
 Release candidate completing the Fable 5 plan. All core subsystems implemented,

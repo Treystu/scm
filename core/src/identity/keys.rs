@@ -380,7 +380,10 @@ mod tests {
         let b = IdentityKeys::generate().public_key_hex();
         let c = IdentityKeys::generate().public_key_hex();
 
-        assert_ne!(safety_number(&a, &b).unwrap(), safety_number(&a, &c).unwrap());
+        assert_ne!(
+            safety_number(&a, &b).unwrap(),
+            safety_number(&a, &c).unwrap()
+        );
     }
 
     #[test]

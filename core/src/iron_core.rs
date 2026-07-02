@@ -666,7 +666,9 @@ impl IronCore {
         let hint = blake3::hash(recipient_id.as_bytes()).as_bytes()[0..4]
             .try_into()
             .unwrap_or([0u8; 4]);
-        let msg_id_bytes: [u8; 16] = *uuid::Uuid::parse_str(&message_id).unwrap_or_else(|_| uuid::Uuid::nil()).as_bytes();
+        let msg_id_bytes: [u8; 16] = *uuid::Uuid::parse_str(&message_id)
+            .unwrap_or_else(|_| uuid::Uuid::nil())
+            .as_bytes();
         let now = web_time::SystemTime::now()
             .duration_since(web_time::UNIX_EPOCH)
             .unwrap_or_default()

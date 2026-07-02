@@ -319,3 +319,7 @@ pnpm-debug.log*
 *.orig
 *.tmp
 *~.nib
+
+# Python bytecode
+__pycache__/
+*.py[cod]

@@ -1349,7 +1349,10 @@ pub async fn handle_jsonrpc_request(
                     if !contact_peer_ids.contains(&msg.sender_id)
                         && !blocked_peer_ids.contains(&msg.sender_id)
                     {
-                        by_sender.entry(msg.sender_id.clone()).or_default().push(msg);
+                        by_sender
+                            .entry(msg.sender_id.clone())
+                            .or_default()
+                            .push(msg);
                     }
                 }
 
@@ -1417,10 +1420,7 @@ pub async fn handle_jsonrpc_request(
                                 id,
                                 JsonRpcErrorBody {
                                     code: -32000,
-                                    message: format!(
-                                        "Failed to accept message request: {:?}",
-                                        e
-                                    ),
+                                    message: format!("Failed to accept message request: {:?}", e),
                                     data: None,
                                 },
                             ),
