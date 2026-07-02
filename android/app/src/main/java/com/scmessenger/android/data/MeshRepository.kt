@@ -3780,7 +3780,9 @@ open class MeshRepository(
 
     /**
      * Compute the Signal-style safety number for comparing identities with [theirPublicKeyHex]
-     * out-of-band. Returns null if our own identity isn't initialized yet.
+     * out-of-band. Returns null if our own identity isn't initialized yet, or an empty string
+     * if the underlying keys are malformed (S5) - callers must treat both as error states, never
+     * render an empty string as if it were a real safety number.
      */
     fun computeSafetyNumber(theirPublicKeyHex: String): String? {
         val ourKey = identityInfo.value?.publicKeyHex ?: return null

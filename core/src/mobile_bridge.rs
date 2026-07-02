@@ -3230,11 +3230,14 @@ pub fn update_peer_transports(peer_id: String, transports: Vec<ProximityTranspor
 
 /// Generate a Signal-style safety number from two public keys (Ed25519 hex).
 /// Returns a 60-digit numeric string. Order-independent so both sides match.
+/// Returns an empty string if either key is malformed - an all-zero fallback
+/// looked like a real (matching) safety number that a user could "verify",
+/// which is unsafe for a value whose entire purpose is tamper detection.
+/// Callers must treat "" as an error state, not a value to display.
 #[uniffi::export]
 pub fn safety_number(our_pubkey_hex: String, their_pubkey_hex: String) -> String {
-    crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex).unwrap_or_else(|_| {
-        "00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000".to_string()
-    })
+    crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex)
+        .unwrap_or_default()
 }
 
 fn current_timestamp() -> u64 {
@@ -3260,6 +3263,33 @@ mod tests {
             network_type: NetworkType::Wifi,
             motion_state: motion,
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // safety_number (S5)
+    // -----------------------------------------------------------------------
+
+    /// S5: a malformed key must produce an empty string, not an all-zero
+    /// 60-digit number that looks like a real (matching) safety number a
+    /// user could mistakenly "verify".
+    #[test]
+    fn test_safety_number_returns_empty_string_on_malformed_keys() {
+        assert_eq!(
+            safety_number("not-hex".to_string(), "junk".to_string()),
+            ""
+        );
+    }
+
+    #[test]
+    fn test_safety_number_is_order_independent_for_valid_keys() {
+        let a = hex::encode([1u8; 32]);
+        let b = hex::encode([2u8; 32]);
+
+        let forward = safety_number(a.clone(), b.clone());
+        let backward = safety_number(b, a);
+
+        assert!(!forward.is_empty());
+        assert_eq!(forward, backward);
     }
 
     #[test]

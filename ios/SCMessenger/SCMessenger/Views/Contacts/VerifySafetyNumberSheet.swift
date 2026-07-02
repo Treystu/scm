@@ -19,15 +19,31 @@ struct VerifySafetyNumberSheet: View {
         viewModel.contacts.first { $0.peerId == peerId }
     }
 
-    private var safetyNumber: String? {
+    /// `nil` means "no contact" or "identity not initialized yet";
+    /// `Some("")` means the underlying Rust `safetyNumber()` rejected a
+    /// malformed key - distinct from a real (matching) safety number, so it
+    /// must never be rendered or allowed to back a verification action (S5).
+    private var safetyNumberRaw: String? {
         guard let contact else { return nil }
         return viewModel.computeSafetyNumber(theirPublicKeyHex: contact.publicKey)
+    }
+
+    private var safetyNumber: String? {
+        guard let raw = safetyNumberRaw, !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private var safetyNumberIsInvalid: Bool {
+        safetyNumberRaw?.isEmpty == true
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: Theme.spacingMedium) {
-                if let contact, let safetyNumber {
+                if safetyNumberIsInvalid {
+                    Text("Safety number unavailable — key data invalid")
+                        .foregroundStyle(.secondary)
+                } else if let contact, let safetyNumber {
                     Text("Compare this number with \(displayName(for: contact)), in person or through another trusted channel. If they match, your conversation is secure from eavesdropping.")
                         .font(Theme.bodySmall)
                         .foregroundStyle(.secondary)
