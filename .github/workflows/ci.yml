@@ -29,11 +29,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Only Windows runners lack a preinstalled/vendored protoc; matches the
+      # manual cross-platform-test.yml dispatch workflow's test-windows job.
+      - name: Install protoc (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo test --workspace --all-features
 
   docs:
