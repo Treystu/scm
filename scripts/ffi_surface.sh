@@ -68,10 +68,12 @@ if [[ -n "$KT_FILE" ]]; then
             fi
         else
             echo "WARN: No Kotlin snapshot found. Run with --update to create."
+            EXIT_CODE=1
         fi
     fi
 else
     echo "WARN: Kotlin bindings not generated yet. Skipping."
+    EXIT_CODE=1
 fi
 
 if [[ -n "$SWIFT_FILE" ]]; then
@@ -91,10 +93,12 @@ if [[ -n "$SWIFT_FILE" ]]; then
             fi
         else
             echo "WARN: No Swift snapshot found. Run with --update to create."
+            EXIT_CODE=1
         fi
     fi
 else
     echo "WARN: Swift bindings not generated yet. Skipping."
+    EXIT_CODE=1
 fi
 
 exit $EXIT_CODE
