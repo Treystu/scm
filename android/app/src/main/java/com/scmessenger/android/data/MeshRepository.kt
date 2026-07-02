@@ -3323,6 +3323,13 @@ open class MeshRepository(
         kotlin.runCatching { wifiTransportManager?.stopDiscovery() }
             .onFailure { Timber.w(it, "Failed to stop WiFi transport") }
 
+        // TransportManager.startAll() is called when the service starts (see
+        // above); stopAll() must be called here too so WiFi Aware detaches
+        // (WifiAwareSession.close()) instead of leaking an attach session
+        // for the lifetime of the process after the mesh service stops.
+        kotlin.runCatching { transportManager?.stopAll() }
+            .onFailure { Timber.w(it, "Failed to stop TransportManager (BLE/WiFi Aware/WiFi Direct/mDNS)") }
+
         kotlin.runCatching { swarmBridge?.shutdown() }
             .onFailure { Timber.w(it, "Failed to shutdown swarm bridge") }
 
@@ -3349,6 +3356,7 @@ open class MeshRepository(
         bleGattServer = null
         bleGattClient = null
         wifiTransportManager = null
+        transportManager = null
 
         _serviceState.value = uniffi.api.ServiceState.STOPPED
         _serviceStats.value = null
