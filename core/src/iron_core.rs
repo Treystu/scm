@@ -1277,7 +1277,7 @@ impl IronCore {
         let identity_key_hex = hex::encode(keys.to_bytes());
 
         let ratchet_sessions_json = self.ratchet_sessions.read().serialize_sessions().ok();
-        let contacts = self.contact_manager.read().list().unwrap_or_default();
+        let contacts = self.contact_manager.read().list()?;
 
         let payload = IdentityBackupPayload {
             version: IDENTITY_BACKUP_PAYLOAD_VERSION,
