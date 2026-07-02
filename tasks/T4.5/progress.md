@@ -61,10 +61,9 @@ the CLI (`cli/src/main.rs`/`api.rs`/`api_axum.rs` all call
 `contacts_store_manager()`), so real desktop usage was affected; Android/iOS
 are unaffected since they go through the separately-backed
 `contacts_bridge::ContactManager` (own sled file). Fixed by namespacing
-contact keys under a `contact:` prefix. **Caveat:** this is a key-format
-change with no migration path - any contacts added via the CLI before this
-fix are orphaned (unprefixed keys). Acceptable for pre-v1.0.0 software with
-no shipped user data, but flagging it explicitly.
+contact keys under a `contact:` prefix. **Caveat (resolved 2026-07-02, see
+S4 below):** this was a key-format change with no migration path - any
+contacts added via the CLI before this fix were orphaned (unprefixed keys).
 
 New tests: `core/src/crypto/backup.rs` (KDF/format unit tests),
 `core/tests/integration_backup.rs` (three new IronCore-level tests:
@@ -73,3 +72,18 @@ backup leaves zero partial state, audit events fire on both export and
 import - the existing tests in that file already covered the lower-level
 `backup.rs`/`RatchetSessionManager` primitives directly, just never through
 `IronCore`'s actual public API).
+
+## Update (2026-07-02, S8 reconciliation)
+The unprefixed-contacts caveat above is now fixed: `ContactManager::new`
+(`core/src/store/contacts.rs`) runs a one-time migration on open that
+rewrites any bare-`peer_id`-keyed contact under its `contact:`-prefixed key
+(S4), covered by `test_unprefixed_contacts_migrate_on_open`. Backup
+export/import also now carries the mobile UniFFI-bridge contacts store
+(`bridge_contacts_json`, T1) and validates ratchet-session entries strictly
+instead of silently dropping corrupt ones on import (T3), both landing
+after this task's original pass.
+
+`cargo test --workspace --all-features` and
+`cargo clippy --workspace --all-features -- -D warnings` re-run locally
+(verified 2026-07-02, local run) - both green, including the backup/contacts
+suites this task and its follow-ups (T1, T3, S4) added.
