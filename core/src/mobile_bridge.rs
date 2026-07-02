@@ -3190,6 +3190,7 @@ pub fn update_peer_transports(peer_id: String, transports: Vec<ProximityTranspor
 
 /// Generate a Signal-style safety number from two public keys (Ed25519 hex).
 /// Returns a 60-digit numeric string. Order-independent so both sides match.
+#[uniffi::export]
 pub fn safety_number(our_pubkey_hex: String, their_pubkey_hex: String) -> String {
     crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex).unwrap_or_else(|_| {
         "00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000".to_string()

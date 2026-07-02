@@ -356,6 +356,7 @@ public func blockedIdentityWithDeviceId(blocked: BlockedIdentity, deviceId: Stri
 public func blockedIdentityWithNotes(blocked: BlockedIdentity, notes: String) -> BlockedIdentity  {
 public func blockedIdentityWithReason(blocked: BlockedIdentity, reason: String) -> BlockedIdentity  {
 public func recommendedTransport(peerId: String) -> ProximityTransport  {
+public func safetyNumber(ourPubkeyHex: String, theirPubkeyHex: String) -> String  {
 public func uniffiCloneHandle() -> UInt64 {
 public func uniffiCloneHandle() -> UInt64 {
 public func uniffiCloneHandle() -> UInt64 {

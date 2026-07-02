@@ -241,6 +241,7 @@ fun `recentIncludingHidden`(`peerFilter`: kotlin.String?, `limit`: kotlin.UInt):
 fun `recentInternal`(`peerFilter`: kotlin.String?, `limit`: kotlin.UInt, `includeHidden`: kotlin.Boolean): List<MessageRecord>
 fun `recent`(`peerFilter`: kotlin.String?, `limit`: kotlin.UInt): List<MessageRecord>
 fun `recommendedBehavior`(): BehaviorAdjustment?
+fun `recommendedTransport`(`peerId`: kotlin.String): ProximityTransport {
 fun `reconcileFromHistory`(`history`: HistoryManager): kotlin.UInt
 fun `recordAbuseSignal`(`peerId`: kotlin.String, `signal`: kotlin.String)
 fun `recordConnection`(`multiaddr`: kotlin.String, `peerId`: kotlin.String)
@@ -271,6 +272,7 @@ fun `routingUpdatePeerHints`(`peerIdHex`: kotlin.String, `hints`: List<kotlin.By
 fun `routingUpdateReliability`(`peerIdHex`: kotlin.String, `success`: kotlin.Boolean)
 fun `runMaintenanceCycle`(`budgetMs`: kotlin.UInt): kotlin.String
 fun `runMaintenanceCycle`(`budgetMs`: kotlin.UInt): kotlin.String
+fun `safetyNumber`(`ourPubkeyHex`: kotlin.String, `theirPubkeyHex`: kotlin.String): kotlin.String {
 fun `saveWithEntries`(`entries`: List<LedgerEntry>)
 fun `save`()
 fun `save`(`settings`: MeshSettings)
@@ -313,6 +315,7 @@ fun `updateDeviceState`(`profile`: DeviceProfile)
 fun `updateDiskStats`(`totalBytes`: kotlin.ULong, `freeBytes`: kotlin.ULong)
 fun `updateKeepalive`(`peerId`: kotlin.String, `intervalSecs`: kotlin.ULong)
 fun `updateLastSeen`(`peerId`: kotlin.String)
+fun `updatePeerTransports`(`peerId`: kotlin.String, `transports`: List<ProximityTransport>)
 fun `validateAuditChain`()
 fun `validate`(`settings`: MeshSettings)
 fun `verifyIntegrity`()
@@ -326,6 +329,10 @@ fun `wifiDirectCreateGroup`(`groupName`: kotlin.String): kotlin.Boolean
 fun `wifiDirectDiscoverPeers`(): kotlin.Boolean
 fun `wifiDirectRemoveGroup`()
 fun `wifiDirectStopDiscovery`()
+fun `withStorageAndLogs`(`config`: MeshServiceConfig, `storagePath`: kotlin.String, `logDirectory`: kotlin.String): MeshService {
+fun `withStorageAndLogs`(`path`: kotlin.String, `logDir`: kotlin.String): IronCore {
+fun `withStorage`(`config`: MeshServiceConfig, `storagePath`: kotlin.String): MeshService {
+fun `withStorage`(`path`: kotlin.String): IronCore {
 fun allocationSize(value: KotlinType): ULong
 fun asByteBuffer() =
 fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultF32.UniffiByValue,)

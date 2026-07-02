@@ -23,8 +23,11 @@ extract_kotlin_symbols() {
         echo "WARN: Kotlin bindings not found at $kt_file" >&2
         return 1
     fi
-    grep -E '^\s*(fun |class |interface |enum |object |data class |sealed class |value class )' "$kt_file" | \
-        sed 's/^\s*//' | sort
+    # Top-level free functions get their closing KDoc `*/` on the same
+    # physical line as `fun` in UniFFI's generated Kotlin, so the pattern
+    # must allow (and strip) an optional leading `*/` before the keyword.
+    grep -E '^\s*(\*/\s*)?(fun |class |interface |enum |object |data class |sealed class |value class )' "$kt_file" | \
+        sed -E 's/^\s*(\*\/\s*)?//' | sort
 }
 
 extract_swift_symbols() {
