@@ -400,7 +400,12 @@ class WifiAwareTransport(
      */
     private suspend fun startLoopbackProxy(peerId: String, peerSocket: Socket) {
         val server = try {
-            ServerSocket(0, 1, InetAddress.getLoopbackAddress())
+            // Bind to the exact address reported to onDataPathConfirmed
+            // (LOOPBACK_ADDRESS, "127.0.0.1") rather than
+            // InetAddress.getLoopbackAddress(), which resolves to the IPv6
+            // loopback (::1) on IPv6-preferring devices - a dial to
+            // 127.0.0.1 would then find nobody listening.
+            ServerSocket(0, 1, InetAddress.getByName(LOOPBACK_ADDRESS))
         } catch (e: Exception) {
             Timber.e(e, "Failed to bind WiFi Aware loopback proxy for $peerId")
             try { peerSocket.close() } catch (_: Exception) {}
@@ -460,9 +465,18 @@ class WifiAwareTransport(
                 val localToPeer = scope.launch {
                     pump(accepted.getInputStream(), peerSocket.getOutputStream(), "local->peer")
                 }
+                // Close the whole bridge as soon as either direction's pump
+                // finishes (that side's socket hit EOF or errored), not
+                // after both: each pump() loops on a blocking read() of its
+                // own input stream, so if only one side closed, the other
+                // direction's pump would otherwise block in read() forever
+                // on a socket nobody will write to again. close() is
+                // idempotent, so it's safe to call from whichever
+                // completion fires first.
+                peerToLocal.invokeOnCompletion { close() }
+                localToPeer.invokeOnCompletion { close() }
                 peerToLocal.join()
                 localToPeer.join()
-                close()
             }
         }
 
@@ -484,9 +498,23 @@ class WifiAwareTransport(
             }
         }
 
-        /** Not used once the loopback proxy is bridging raw bytes; kept for API compatibility. */
+        /**
+         * Always fails: once the loopback proxy is active, delivery to
+         * [peerId] happens through libp2p's own dial into the loopback
+         * socket (see [startLoopbackProxy]'s doc comment), not through this
+         * discrete send() call - but [TransportManager] still routes
+         * `sendData`-capable callers through here first, so a silent
+         * `false` return there used to look like a generic "no route"
+         * rather than "this transport structurally cannot deliver this
+         * way anymore." Log at error level so that's visible instead of
+         * lost among routine warnings.
+         */
         fun send(data: ByteArray): Boolean {
-            Timber.w("WiFi Aware sendData is a no-op once the loopback proxy is active for $peerId")
+            Timber.e(
+                "WiFi Aware sendData() is permanently a no-op for $peerId once its loopback " +
+                    "proxy is active; delivery happens via libp2p dialing the loopback address " +
+                    "reported to onDataPathConfirmed, not via this call"
+            )
             return false
         }
 
