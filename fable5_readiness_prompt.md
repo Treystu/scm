@@ -1,174 +1,129 @@
-# Prompt: Fable 5 Pre-Test Readiness Audit
+# Prompt: Fable 5 Codebase Readiness Assessment
 
-Use this prompt to kick off a Fable session (or a `/sprint` cloud worker) whose
-sole job is to certify SCMessenger as code-complete and ready for the
-device-testing phase — including reviewing the currently open pull request
-before it gets merged or built on further. Fable does not write the fixes
-itself: it diagnoses, then hands off a plan detailed enough for Sonnet/Haiku
-models to execute mechanically.
+This briefs Fable on where SCMessenger actually stands — with evidence, not
+assumptions — and hands it the decision of what to do next. It deliberately
+does not prescribe a fixed sequence of steps: Fable is capable enough to
+triage a problem of this shape better than a scripted checklist can, and a
+rigid sequence written in advance (by someone who hasn't read the actual
+failure logs) risks locking it into the wrong order of operations. Trust its
+judgment on sequencing and scope. The one fixed requirement is the shape of
+the handoff at the end: anything left for further implementation must be
+specified precisely enough for a Sonnet or Haiku model to execute
+mechanically.
 
 ---
 
 ## Prompt text
 
-> You are auditing SCMessenger for release readiness. The master backlog is
-> `fable5plan.md` (Tracks T1–T5, tasks `T<track>.<seq>`), each task mirrored
-> in `tasks/T<id>/progress.md` with a verification checklist. `CHANGELOG.md`
-> currently claims `1.0.0-rc2` is a complete "Fable 5 plan" release with all
-> gates green. Your job is to check whether that claim is actually true
-> **right now**, after the most recent commits and the open pull request
-> below, and to leave the codebase in a state where "ready for testing" is a
-> verified fact, not an assertion.
+> You're assessing SCMessenger for release readiness. Read the briefing
+> below in full before deciding what to do — it separates what's actually
+> verified from what's still unknown, because this repo has already shown at
+> least one instance of a confident claim being false on the commit where it
+> was made. Then use your own judgment about where to start, what to fix
+> yourself, and what to hand off.
 >
-> **0. Review the current status and the open PR before anything else.**
-> `main` is at `bc9b25e`. There is one open PR you must review in full before
-> any of it gets merged or otherwise committed further:
-> - **PR #1** — `claude/v1-0-0-code-gaps-7d849x` → `main`
->   (head `1f52b425`), 22 commits, 68 files changed (+11023/-805). Its
->   description claims it closes out T1.4 (WiFi Direct group-owner-intent
->   from battery state, plus a new task `T1.8` it introduces), T4.5 (Argon2id
->   identity backup export/import + audit events), T4.2-adjacent safety-number
->   verification UI, CLI JSON-RPC message-request handling, and touches the
->   progress checklists for `T1.2`, `T1.3`, `T1.4`, `T1.8`, `T2.4`, `T2.5`,
->   `T4.5`, `T5.7` directly.
->   - **Its CI is not green.** Of 16 check runs on the head commit, only
->     "cubic · AI code reviewer" passed and two binding-generation jobs were
->     skipped; everything else — `Test (ubuntu-latest)`, `Lint`, `WASM`,
->     `iOS`, `iOS Build`, all three `Android` ABI builds, `Android Debug APK`,
->     `FFI Surface Contract`, and `Docs` — is either `failure` or
->     `cancelled`, and GitHub reports `mergeable_state: unstable`.
->   - Do not trust the PR description's claims over the CI result. Check out
->     the branch, reproduce each failing job locally (`cargo test
->     --workspace`, `cargo clippy --workspace --all-features -- -D
->     warnings`, `cargo build --target wasm32-unknown-unknown -p
->     scmessenger-wasm`, the Android NDK cross-builds, the iOS build,
->     `scripts/ffi_surface.sh`), and get the actual error for each failure —
->     pull the job logs from the workflow run if reproducing locally doesn't
->     immediately surface the cause.
->   - For each failure, determine: is this a real regression the PR
->     introduced, pre-existing breakage already on `main` that the PR merely
->     exposed, or a CI infrastructure problem (missing secret, runner
->     mismatch, flaky network dependency)? Say which, with evidence, for
->     every single failing job — "flaky" is not an acceptable conclusion
->     without a second run confirming it.
->   - Only after PR #1's real state is understood should you move on to the
->     rest of this audit; its outcome likely changes which `tasks/T*` boxes
->     below are actually still open versus already fixed-but-blocked-on-CI.
+> ## What's verified true right now
 >
-> **1. Reconcile progress.md against reality.**
-> As of `main` (before PR #1 merges), the following tasks still have
-> unchecked verification boxes in their `tasks/T*/progress.md`. PR #1 edits
-> several of these same files (see §0) — check the versions of these files
-> *on the PR branch*, not on `main`, since the PR may have already flipped
-> some boxes (correctly or not):
-> - `T1.2` (WifiAwareTransport de-orphaning) — 3 unchecked items, incl.
->   `cargo test -p scmessenger-core wifi_aware` and a `MockWifiAwareBridge`
->   integration test.
-> - `T1.3` (Android WifiAwarePlatformBridge) — 2 unchecked (two-device
->   procedure, Robolectric tests).
-> - `T1.4` (Wi-Fi Direct Rust transport) — 4 unchecked (unit tests, two-device
->   procedure, clippy, FFI snapshot).
-> - `T2.4` (background sync scheduling) — 4 unchecked (maintenance-cycle
->   budget test, XCTest, Android instrumented test, FFI snapshot).
-> - `T2.5` (outbox × drift custody convergence) — 3 unchecked
->   (`integration_retry_lifecycle.rs` assertions, state-transition property
->   test).
-> - `T4.5` (key backup/recovery) — 4 unchecked (roundtrip test, tampered-blob
->   test, KDF memory-hardness assertion, audit events).
+> - `main` is at `bc9b25e`. The master backlog is `fable5plan.md` (Tracks
+>   T1–T5), mirrored per-task in `tasks/T<id>/progress.md` checklists.
+>   `CHANGELOG.md` claims `1.0.0-rc2` is a complete release with "all gates
+>   green."
+> - **`main`'s CI has failed on every run in its visible history.** I pulled
+>   the last 15 workflow runs on `main` (`CI`, `Mobile`, `Cross` workflows,
+>   covering the 5 most recent commits back to `53370fe` on 2026-06-15):
+>   15 out of 15 are `failure`. That includes `0a49d32` — "docs: update
+>   CHANGELOG for v1.0.0-rc2" — the exact commit whose own message claims
+>   "the Rust gatekeeper suite passes" and "Android/iOS/WASM builds are
+>   verified." Both `CI` and `Cross` failed on that same SHA. The claim was
+>   false the moment it was written.
+> - There's one open PR: **#1**, `claude/v1-0-0-code-gaps-7d849x` → `main`
+>   (head `1f52b425`), 22 commits, 68 files changed (+11023/-805). It claims
+>   to close T1.4 (WiFi Direct group-owner-intent from battery state, plus a
+>   new task `T1.8` it introduces), T4.5 (Argon2id identity backup
+>   export/import + audit events), safety-number verification UI, and CLI
+>   JSON-RPC message-request handling. It directly edits the progress
+>   checklists for `T1.2`, `T1.3`, `T1.4`, `T1.8`, `T2.4`, `T2.5`, `T4.5`,
+>   `T5.7`.
+> - Of 16 CI check runs on PR #1's head commit: only "cubic · AI code
+>   reviewer" passed, two binding-generation jobs were skipped, and the rest
+>   — `Test (ubuntu-latest)`, `Lint`, `WASM`, `iOS`, `iOS Build`, all three
+>   `Android` ABI builds, `Android Debug APK`, `FFI Surface Contract`, `Docs`
+>   — are `failure` or `cancelled`. GitHub reports `mergeable_state:
+>   unstable`.
+> - On `main` as of this writing, six tasks still have unchecked boxes in
+>   their `tasks/T*/progress.md`: `T1.2` (3 unchecked), `T1.3` (2), `T1.4`
+>   (4), `T2.4` (4), `T2.5` (3), `T4.5` (4). PR #1 touches several of these
+>   exact files — check the PR branch's version, not `main`'s, since it may
+>   have already flipped boxes (correctly or not).
+> - The commits `5df71b9` ("gemini Updates") and `bc9b25e` ("update for
+>   cloud orchestrator") landed after those checklists were last edited on
+>   `main`, adding `core/tests/integration_wifi_aware.rs`,
+>   `core/tests/integration_retry_lifecycle.rs`, drift-mule test additions,
+>   two new CI workflows, and a large new `cloud/` orchestrator subsystem
+>   (Python + Terraform + Docker) with no lint/test gate of its own —
+>   including committed `cloud/orchestrator/__pycache__/*.pyc` files that
+>   shouldn't be tracked.
+> - `docs/device-testing.md` exists. Whether it documents runnable
+>   procedures or placeholders is unverified.
 >
-> The commits `5df71b9` ("gemini Updates") and `bc9b25e` ("update for cloud
-> orchestrator") landed *after* those checklists were last touched, and they
-> add `core/tests/integration_wifi_aware.rs`,
-> `core/tests/integration_retry_lifecycle.rs`, additions to
-> `core/tests/integration_drift_mule.rs`, two new CI workflows
-> (`.github/workflows/cross-platform-test.yml`,
-> `.github/workflows/ios-build-test.yml`), and a large new `cloud/`
-> orchestrator subsystem (Python + Terraform + Docker, currently covered by
-> no lint or test gate). For each unchecked box above: determine whether the
-> new commits actually satisfy it, run the named verification command
-> yourself, and only then flip the checkbox. Do not take the commit messages
-> on faith — read the diffs and run the tests.
+> ## What's not known — get evidence before acting on it, don't assume
 >
-> **2. Full-suite verification.** Run and report pass/fail with output for:
-> - `cargo fmt --check`, `cargo clippy --workspace --all-features -- -D
->   warnings`, `cargo deny check`
-> - `cargo test --workspace --all-features`
-> - `scripts/ffi_surface.sh` snapshot diff (Kotlin + Swift) — flag any drift
->   introduced by the FFI changes in `5df71b9`/`bc9b25e` that wasn't captured
->   in a snapshot update
-> - Cross-compile matrix: Android (aarch64/armv7/x86_64 via `cargo ndk`),
->   iOS (`aarch64-apple-ios`, simulator), WASM
->   (`wasm32-unknown-unknown -p scmessenger-wasm`)
-> - Android `./gradlew :app:assembleDebug` and the iOS simulator build
-> - The two new GitHub Actions workflows added in `bc9b25e` — confirm they
->   actually run green on this branch's HEAD, not just that the YAML parses
+> - **Why every CI job has failed for two-plus weeks straight is unknown to
+>   me.** I tried to pull the job logs and they'd already expired (404). It
+>   could be a genuine code/build break, or it could be something no amount
+>   of code editing fixes — an expired secret, exhausted Actions minutes,
+>   macOS-runner unavailability for the iOS jobs, a permissions problem.
+>   Don't assume it's code-fixable until you've actually seen the failure.
+> - Whether PR #1's specific failures are regressions the PR introduced, or
+>   just `main`'s pre-existing breakage carried forward unchanged, is
+>   unknown — the 100% failure rate on `main` makes the latter plausible.
+> - Whether the new `cloud/` subsystem has hygiene problems beyond the
+>   committed `.pyc` files (e.g. secrets in the Terraform/scripts) is
+>   unverified.
+> - Whether any task *not* listed above as still-open actually has
+>   passing, meaningful tests behind its checked boxes, or was just checked
+>   by habit, is unverified.
 >
-> **3. Close the loop on `grep -rn "TODO\|FIXME\|unimplemented!\|todo!"
-> core/src android ios cli wasm`.** `iron_core.rs`'s async-keepalive TODO was
-> reportedly removed by `T2.1` — confirm it's actually gone, and confirm no
-> new TODOs crept in via the two "gemini"/"cloud orchestrator" commits.
+> ## Your call
 >
-> **4. Audit the new `cloud/` subsystem for hygiene**, since it shipped with
-> no lint/test gate of its own: `cloud/orchestrator/__pycache__/*.pyc` files
-> were committed (should be `.gitignore`d, not tracked); confirm no secrets
-> (API keys, service-account JSON) are embedded in
-> `cloud/terraform/*.tf`, `cloud/scripts/*.sh`, or `cloud/worker/*.sh`.
+> You have the full picture now. Decide the order of operations, what's
+> worth fixing yourself and proving with a real passing run versus what's
+> better left as a precisely specified task for another model, and whether
+> anything here is genuinely outside code's reach and needs to be flagged to
+> a human rather than worked around. Some things worth weighing — not steps
+> to follow in order:
 >
-> **5. Two-device / physical field procedures.** `docs/device-testing.md`
-> exists — confirm it documents runnable procedures for every task above
-> that requires physical-device verification (T1.3, T1.4, T1.6, T2.4), and
-> that none of them are placeholders.
+> - Cheap, fast signals (lint/unit tests on Linux) are worth exhausting
+>   before expensive ones (macOS/iOS/Android cross-builds) if you end up
+>   iterating blind.
+> - Work that doesn't depend on CI being green — e.g. reading PR #1's diff
+>   for correctness or security issues in the crypto (Argon2id backup) and
+>   identity-verification (safety numbers) code it touches — doesn't need to
+>   wait on CI triage finishing first.
+> - If something needs org/repo-level access you don't have (secrets,
+>   billing, runner quota), say so plainly rather than working around it or
+>   declaring success anyway.
+> - Don't take any commit message, PR description, checklist checkbox, or
+>   CHANGELOG line at face value in this repo — verify it yourself before
+>   relying on it or repeating it.
 >
-> **6. Deliver output in two parts: a short verdict, then an execution-ready
-> plan.** This audit is not the implementation pass — Sonnet and Haiku
-> models will pick up your output next and execute it, so your job is to do
-> all the hard diagnostic thinking now and leave them nothing to guess at.
+> ## What to leave behind when you're done
 >
-> **6a. Verdict (a few sentences, at the top).** Is the codebase code-complete
-> and ready for testing, yes or no, and why — one line per blocking category
-> (PR #1 CI, unchecked progress.md items, TODOs, cloud/ hygiene, device-test
-> docs). If yes: say so plainly, attach the full verification log, and skip
-> 6b.
->
-> **6b. Remediation plan — a numbered, ordered list of atomic tasks**, one
-> per fix, written so that a Sonnet or Haiku model can execute each task in
-> a single turn with zero architectural judgment left to make. You do the
-> investigation and the design decisions; they do the mechanical edit. For
-> every task, include ALL of:
->   - **Files**: exact path(s) touched.
->   - **Anchor**: the exact function/struct/line range/symbol to change (not
->     "somewhere in the routing module" — the literal `path:line`).
->   - **Change**: an unambiguous description of the edit — prefer literal
->     before/after code or a diff-shaped description over prose like "fix
->     the bug." If multiple approaches are possible, YOU pick one and state
->     it; never leave "consider using X or Y" for the executing model to
->     resolve.
->   - **Why**: one sentence tying it to the failing test/CI job/unchecked
->     box that motivated it — no invented rationale, and no re-litigating
->     design decisions already made in `fable5plan.md`.
->   - **Verify**: the exact command to run to confirm the task in isolation
->     (e.g. `cargo test -p scmessenger-core wifi_aware`), and what output
->     counts as success.
->   - **Done when**: an explicit, checkable condition (a specific checkbox
->     in a specific `tasks/T*/progress.md` flips, a specific CI job goes
->     green, a specific grep returns empty).
->   - Order the list by dependency — e.g., a task that fixes a compile error
->     blocking `cargo test` must precede tasks whose "Verify" step depends on
->     tests running at all; CI-infrastructure fixes precede tasks that rely
->     on CI to confirm them.
->   - If a listed fix is large enough that it doesn't fit "single turn,
->     zero judgment calls" (e.g. a genuinely missing feature, not a bug),
->     break it into an ordered sub-sequence of atomic tasks rather than
->     leaving one big vague task.
-> - Update every `tasks/T*/progress.md` checkbox to match verified reality
->   (not intent), and correct `CHANGELOG.md` if its `1.0.0-rc2` claims don't
->   match what you actually verified — but do this as one of the numbered
->   tasks in the plan, not as a side effect, so Sonnet/Haiku can carry it out
->   the same way as everything else.
-> - Do not implement the fixes yourself in this pass. Your deliverable is
->   the diagnosis plus the plan; if something in `fable5plan.md` needs a new
->   task entry to track work this audit surfaced, add it there under the
->   appropriate track before handing off.
+> - An honest written account of what you found and verified, including
+>   anything you could not verify and why.
+> - Any fix you made yourself, applied and proven with a real passing
+>   run — not merely asserted.
+> - For everything still open that needs further implementation: an
+>   ordered, atomic task list precise enough for a Sonnet or Haiku model to
+>   execute each item mechanically — exact files, exact anchors
+>   (`path:line`), the exact change (you make any remaining design
+>   decision yourself; don't leave options open for the next model to
+>   resolve), the exact command to verify it, and an explicit done
+>   condition. Reconcile `tasks/T*/progress.md` and `CHANGELOG.md` to
+>   verified reality as part of this, not as an afterthought.
+> - Anything that isn't a code problem, called out separately and
+>   explicitly, so a human deals with it instead of it silently blocking
+>   everything downstream.
 
 ---
 
