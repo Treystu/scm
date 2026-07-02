@@ -25,7 +25,7 @@ fun QrCodeImage(
     modifier: Modifier = Modifier,
     size: Int = 512
 ) {
-    val bitmap = remember(data) {
+    val bitmap = remember(data, size) {
         try {
             generateQrCodeBitmap(data, size)
         } catch (e: Exception) {
@@ -54,17 +54,18 @@ fun generateQrCodeBitmap(data: String, size: Int): Bitmap {
 
     val width = bitMatrix.width
     val height = bitMatrix.height
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
 
-    for (x in 0 until width) {
-        for (y in 0 until height) {
-            bitmap.setPixel(
-                x,
-                y,
+    // Fill an IntArray in Kotlin and hand it to the bitmap in one call,
+    // instead of up to 262,144 (512x512) individual JNI setPixel calls on
+    // the main thread.
+    val pixels = IntArray(width * height)
+    for (y in 0 until height) {
+        val rowOffset = y * width
+        for (x in 0 until width) {
+            pixels[rowOffset + x] =
                 if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
-            )
         }
     }
 
-    return bitmap
+    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.RGB_565)
 }
