@@ -478,7 +478,7 @@ pub async fn handle_jsonrpc_request(
         // ── Contacts ──
         ClientIntent::GetContacts {} => {
             if let Some(ref core) = ctx.core {
-                let mgr = core.contacts_manager();
+                let mgr = core.contacts_store_manager();
                 match mgr.list() {
                     Ok(contacts) => {
                         let list: Vec<Value> = contacts
@@ -517,9 +517,9 @@ pub async fn handle_jsonrpc_request(
         }
         ClientIntent::AddContact { peer_id, nickname } => {
             if let Some(ref core) = ctx.core {
-                let mgr = core.contacts_manager();
+                let mgr = core.contacts_store_manager();
                 let mut contact =
-                    scmessenger_core::contacts_bridge::Contact::new(peer_id.clone(), String::new());
+                    scmessenger_core::store::Contact::new(peer_id.clone(), String::new());
                 if let Some(n) = nickname {
                     contact = contact.with_nickname(n);
                 }
@@ -551,7 +551,7 @@ pub async fn handle_jsonrpc_request(
         }
         ClientIntent::RemoveContact { peer_id } => {
             if let Some(ref core) = ctx.core {
-                let mgr = core.contacts_manager();
+                let mgr = core.contacts_store_manager();
                 match mgr.remove(peer_id) {
                     Ok(()) => {
                         let mut m = Map::new();
@@ -1332,7 +1332,7 @@ pub async fn handle_jsonrpc_request(
         // doesn't make requests vanish before the user acts on them.
         ClientIntent::GetPendingMessageRequests {} => {
             if let Some(ref core) = ctx.core {
-                let contacts = core.contacts_manager().list().unwrap_or_default();
+                let contacts = core.contacts_store_manager().list().unwrap_or_default();
                 let contact_peer_ids: std::collections::HashSet<String> =
                     contacts.into_iter().map(|c| c.peer_id).collect();
                 let blocked_peer_ids: std::collections::HashSet<String> = core
@@ -1401,16 +1401,15 @@ pub async fn handle_jsonrpc_request(
                 let public_key_hex = core
                     .peek_received_messages()
                     .into_iter()
-                    .find(|m| m.sender_id == request_id)
-                    .and_then(|m| m.sender_public_key_hex);
+                    .filter(|m| m.sender_id == request_id)
+                    .filter_map(|m| m.sender_public_key_hex)
+                    .next_back();
 
                 match public_key_hex {
                     Some(public_key) => {
-                        let contact = scmessenger_core::contacts_bridge::Contact::new(
-                            request_id.clone(),
-                            public_key,
-                        );
-                        match core.contacts_manager().add(contact) {
+                        let contact =
+                            scmessenger_core::store::Contact::new(request_id.clone(), public_key);
+                        match core.contacts_store_manager().add(contact) {
                             Ok(()) => {
                                 let mut m = Map::new();
                                 m.insert("accepted".to_string(), true.into());

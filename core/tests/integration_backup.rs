@@ -301,7 +301,7 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
         .write()
         .get_or_create_session(
             "bob",
-            &alice.identity_signing_key_for_test(),
+            &alice.test_only_identity_signing_key(),
             &bob_x25519_pub,
         )
         .expect("alice creates sender session");
@@ -313,7 +313,7 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
         let mut guard = sessions.write();
         let session = guard.get_session_mut("bob").expect("alice session exists");
         encrypt_message_ratcheted(
-            &alice.identity_signing_key_for_test(),
+            &alice.test_only_identity_signing_key(),
             session,
             b"hello bob, before backup",
         )
@@ -376,7 +376,7 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
             .get_session_mut("bob")
             .expect("restored session exists");
         encrypt_message_ratcheted(
-            &alice_restored.identity_signing_key_for_test(),
+            &alice_restored.test_only_identity_signing_key(),
             session,
             b"hello bob, after restore",
         )
@@ -436,6 +436,107 @@ fn iron_core_import_tampered_backup_leaves_no_partial_state() {
         fresh.ratchet_session_count(),
         0,
         "no ratchet sessions should have been imported from a tampered backup"
+    );
+}
+
+/// A backup whose ratchet-session JSON contains one structurally-valid but
+/// cryptographically corrupt entry (bad hex) must fail the whole import with
+/// CorruptionDetected, not silently drop that entry and report success -
+/// T3: `deserialize_sessions` used to skip bad entries instead of failing.
+#[test]
+fn iron_core_import_rejects_corrupted_ratchet_session_entry() {
+    let alice = IronCore::new();
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+    let identity_key_hex = hex::encode(alice.test_only_identity_signing_key().to_bytes());
+
+    let zero_hex = hex::encode([0u8; 32]);
+    let corrupted_sessions_json = format!(
+        r#"{{"peer-x":{{"our_dh_secret_hex":"not-hex","our_dh_public_hex":"{zero}","their_dh_public_hex":null,"root_key_hex":"{zero}","sending_chain":null,"receiving_chain":null,"dh_step_count":0,"initialized":false,"has_identity_secret":false,"identity_secret_hex":null}}}}"#,
+        zero = zero_hex
+    );
+
+    let payload = serde_json::json!({
+        "version": 2,
+        "identity_key_hex": identity_key_hex,
+        "ratchet_sessions_json": corrupted_sessions_json,
+        "contacts": []
+    })
+    .to_string();
+
+    let passphrase = "corrupted-session-test";
+    let backup = encrypt_backup(&payload, passphrase, None).expect("encrypt succeeds");
+
+    let fresh = IronCore::new();
+    let result = fresh.import_identity_backup(backup, passphrase.to_string());
+
+    assert!(
+        matches!(
+            result,
+            Err(scmessenger_core::IronCoreError::CorruptionDetected)
+        ),
+        "corrupted ratchet session entry must fail closed with CorruptionDetected, got {:?}",
+        result
+    );
+    assert!(
+        fresh.get_identity_info().public_key_hex.is_none(),
+        "identity must not be imported when ratchet session validation fails"
+    );
+}
+
+/// T1: `build_identity_backup_payload` used to only read the core's
+/// internal `contact_manager`, but Android/iOS add contacts through the
+/// separate UniFFI-bridge `contacts_manager()` store (`contacts.db`) - a
+/// mobile export's address book was silently empty/stale on restore. This
+/// exercises the actual mobile code path: add a contact via
+/// `contacts_manager()`, export, restore onto a fresh persistent core
+/// (simulating a new device), and confirm the bridge contact - including
+/// `verified_at` - survives.
+#[test]
+fn iron_core_backup_restore_preserves_bridge_contacts() {
+    use tempfile::tempdir;
+
+    let alice_dir = tempdir().unwrap();
+    let alice = IronCore::with_storage(alice_dir.path().to_str().unwrap().to_string());
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+
+    let mut bridge_contact =
+        scmessenger_core::contacts_bridge::Contact::new("bob".to_string(), hex::encode([9u8; 32]));
+    bridge_contact.nickname = Some("Bob".to_string());
+    bridge_contact.verified_at = Some(1_700_000_000);
+    alice
+        .contacts_manager()
+        .add(bridge_contact)
+        .expect("alice adds bob via the bridge contacts store");
+
+    let passphrase = "bridge-contacts-test";
+    let backup = alice
+        .export_identity_backup(passphrase.to_string())
+        .expect("export succeeds");
+
+    // Restore onto a fresh persistent core with its own (empty) bridge
+    // contacts.db, simulating a new device.
+    let restored_dir = tempdir().unwrap();
+    let restored = IronCore::with_storage(restored_dir.path().to_str().unwrap().to_string());
+    restored
+        .import_identity_backup(backup, passphrase.to_string())
+        .expect("import succeeds");
+
+    let restored_contacts = restored
+        .contacts_manager()
+        .list()
+        .expect("restored bridge contacts list");
+    assert_eq!(
+        restored_contacts.len(),
+        1,
+        "bridge contact must survive the backup/restore"
+    );
+    assert_eq!(restored_contacts[0].peer_id, "bob");
+    assert_eq!(
+        restored_contacts[0].verified_at,
+        Some(1_700_000_000),
+        "verified_at must survive the backup/restore intact"
     );
 }
 

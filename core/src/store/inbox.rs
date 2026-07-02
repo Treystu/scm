@@ -487,6 +487,50 @@ mod tests {
         assert!(drained_again.is_empty());
     }
 
+    /// T6 investigation: bincode is not self-describing, so
+    /// `#[serde(default)]` on `sender_public_key_hex` only helps JSON
+    /// callers - a bincode-encoded record from before that field existed
+    /// fails to decode under the current struct (demonstrated below).
+    ///
+    /// This is a live gap in `InboxBackend::Persistent`'s bincode
+    /// encoding in the abstract, but it does not currently expose any
+    /// user: every `IronCore` constructor (`new`, `with_storage`,
+    /// `with_storage_and_logs`) builds its inbox with `Inbox::new()`
+    /// (in-memory), never `Inbox::persistent`/`persistent_with_storage` -
+    /// grep confirms those two constructors are only reachable from this
+    /// module's own tests and `tests/integration_e2e.rs`. No CLI, mobile
+    /// (UniFFI), or WASM caller persists inbox messages to disk today, so
+    /// there is no pre-existing bincode blob for `sender_public_key_hex`
+    /// to orphan. Left as a regression guard: if a future change wires a
+    /// persistent inbox into a real constructor, this test documents the
+    /// exact failure mode to fix first (a legacy-struct fallback decode).
+    #[test]
+    fn test_legacy_bincode_record_without_sender_key_fails_to_decode() {
+        #[derive(Serialize)]
+        struct LegacyReceivedMessage {
+            message_id: String,
+            sender_id: String,
+            payload: Vec<u8>,
+            received_at: u64,
+            // no `sender_public_key_hex` - this is the pre-change shape.
+        }
+
+        let legacy = LegacyReceivedMessage {
+            message_id: "msg1".to_string(),
+            sender_id: "alice".to_string(),
+            payload: b"hello".to_vec(),
+            received_at: 1_700_000_000,
+        };
+        let legacy_bytes = bincode::serialize(&legacy).unwrap();
+
+        assert!(
+            bincode::deserialize::<ReceivedMessage>(&legacy_bytes).is_err(),
+            "pre-change bincode records are not decodable under the current \
+             ReceivedMessage shape - confirms this would be a real gap if the \
+             persistent inbox backend were ever wired into production"
+        );
+    }
+
     #[test]
     fn test_get_inbox_count() {
         let mut inbox = Inbox::new();

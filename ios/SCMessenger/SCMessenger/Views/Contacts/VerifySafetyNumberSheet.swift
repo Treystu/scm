@@ -14,20 +14,37 @@ struct VerifySafetyNumberSheet: View {
     let peerId: String
     let viewModel: ContactsViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var actionError: String?
 
     private var contact: Contact? {
         viewModel.contacts.first { $0.peerId == peerId }
     }
 
-    private var safetyNumber: String? {
+    /// `nil` means "no contact" or "identity not initialized yet";
+    /// `Some("")` means the underlying Rust `safetyNumber()` rejected a
+    /// malformed key - distinct from a real (matching) safety number, so it
+    /// must never be rendered or allowed to back a verification action (S5).
+    private var safetyNumberRaw: String? {
         guard let contact else { return nil }
         return viewModel.computeSafetyNumber(theirPublicKeyHex: contact.publicKey)
+    }
+
+    private var safetyNumber: String? {
+        guard let raw = safetyNumberRaw, !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private var safetyNumberIsInvalid: Bool {
+        safetyNumberRaw?.isEmpty == true
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: Theme.spacingMedium) {
-                if let contact, let safetyNumber {
+                if safetyNumberIsInvalid {
+                    Text("Safety number unavailable — key data invalid")
+                        .foregroundStyle(.secondary)
+                } else if let contact, let safetyNumber {
                     Text("Compare this number with \(displayName(for: contact)), in person or through another trusted channel. If they match, your conversation is secure from eavesdropping.")
                         .font(Theme.bodySmall)
                         .foregroundStyle(.secondary)
@@ -49,19 +66,38 @@ struct VerifySafetyNumberSheet: View {
 
                     verificationStatus(for: contact)
 
+                    if let actionError {
+                        Text(actionError)
+                            .font(Theme.bodySmall)
+                            .foregroundStyle(.red)
+                    }
+
                     if contact.verifiedAt != nil {
                         Button("Clear Verification", role: .destructive) {
-                            try? viewModel.unverifyContact(peerId: peerId)
+                            do {
+                                try viewModel.unverifyContact(peerId: peerId)
+                                actionError = nil
+                            } catch {
+                                actionError = "Failed to clear verification: \(error.localizedDescription)"
+                            }
                         }
                         .buttonStyle(.bordered)
                     } else {
                         Button {
-                            try? viewModel.markContactVerified(peerId: peerId)
+                            do {
+                                try viewModel.markContactVerified(peerId: peerId)
+                                actionError = nil
+                            } catch {
+                                actionError = "Failed to mark as verified: \(error.localizedDescription)"
+                            }
                         } label: {
                             Label("Mark as Verified", systemImage: "checkmark.shield.fill")
                         }
                         .buttonStyle(.borderedProminent)
                     }
+                } else if contact == nil {
+                    Text("Contact not found")
+                        .foregroundStyle(.secondary)
                 } else {
                     Text("Your identity isn't initialized yet")
                         .foregroundStyle(.secondary)

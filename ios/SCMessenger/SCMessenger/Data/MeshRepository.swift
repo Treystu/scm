@@ -2941,7 +2941,9 @@ final class MeshRepository {
 
     /// Compute the Signal-style safety number for comparing identities with
     /// `theirPublicKeyHex` out-of-band. Returns nil if our own identity isn't
-    /// initialized yet.
+    /// initialized yet, or an empty string if the underlying keys are
+    /// malformed (S5) - callers must treat both as error states, never
+    /// render an empty string as if it were a real safety number.
     func computeSafetyNumber(theirPublicKeyHex: String) -> String? {
         guard let ourKey = getIdentityInfo()?.publicKeyHex else { return nil }
         return safetyNumber(ourPubkeyHex: ourKey, theirPubkeyHex: theirPublicKeyHex)

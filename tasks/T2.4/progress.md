@@ -48,3 +48,14 @@
   `assembleDebug`/`xcodebuild build`, never a test task, on either platform. Making these tests
   actually execute needs someone with Xcode/Android Studio to register a test target and
   re-enable Gradle test compilation — that's a bigger, separate fix than this item's scope.
+
+## Update (2026-07-02, S8 reconciliation)
+`cargo test --workspace --all-features` and
+`cargo clippy --workspace --all-features -- -D warnings` re-run locally
+(verified 2026-07-02, local run) - both green, including
+`test_run_maintenance_cycle_budget`. The Android/iOS unit-test boxes above
+stay checked as "written and logically verified by reading" per the
+existing caveat, not as "compiled and run by CI" - that caveat is still
+accurate and unresolved (Robolectric/XCTest wiring, tracked separately,
+not attempted here). The FFI-snapshot box stays unchecked/not-applicable
+as originally noted.

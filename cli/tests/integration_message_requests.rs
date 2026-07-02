@@ -137,7 +137,11 @@ fn message_request_lifecycle_accept() {
         .await;
         assert_eq!(result["accepted"], true);
 
-        let contacts = bob.contacts_manager().list().expect("list contacts");
+        // Accepted contacts land in the CLI's contacts_store_manager(), the
+        // same store the send path (UiCommand::Send) reads from - not the
+        // UniFFI-bridge contacts_manager(), which the send path never
+        // looks at (T2).
+        let contacts = bob.contacts_store_manager().list().expect("list contacts");
         assert_eq!(contacts.len(), 1);
         assert_eq!(contacts[0].peer_id, alice_identity_id);
         assert!(
@@ -206,8 +210,59 @@ fn message_request_lifecycle_reject() {
         );
 
         // And must not have been silently added as a contact.
-        let contacts = bob.contacts_manager().list().expect("list contacts");
+        let contacts = bob.contacts_store_manager().list().expect("list contacts");
         assert!(contacts.is_empty());
+    });
+}
+
+/// T2: a message from a sender who is *already* a CLI contact
+/// (contacts_store_manager(), the store `UiCommand::Send` and every `scm
+/// contacts` path use) must never show up as a pending request, even
+/// though get_pending_message_requests used to check the separate
+/// UniFFI-bridge contacts_manager() and so treated every CLI-only contact
+/// as a stranger.
+#[test]
+fn existing_cli_contact_message_is_not_a_pending_request() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let alice = make_node();
+        let bob = Arc::new(make_node());
+        let bob_pubkey = pubkey(&bob);
+        let alice_pubkey = pubkey(&alice);
+        let alice_identity_id = alice
+            .get_identity_info()
+            .identity_id
+            .expect("alice identity id");
+
+        // Bob already knows Alice as a CLI contact before she messages him.
+        bob.contacts_store_manager()
+            .add(scmessenger_core::store::Contact::new(
+                alice_identity_id.clone(),
+                alice_pubkey,
+            ))
+            .expect("bob adds alice as a contact");
+
+        let prepared = alice
+            .prepare_message(
+                bob_pubkey,
+                "hey, it's me".to_string(),
+                MessageType::Text,
+                None,
+            )
+            .expect("prepare_message succeeds");
+        bob.receive_message(prepared.envelope_data)
+            .expect("receive_message succeeds");
+
+        let ctx = make_ctx(bob.clone());
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        std::mem::forget(rx);
+
+        let result = rpc(&ctx, &tx, "get_pending_message_requests", json!({})).await;
+        assert_eq!(
+            result["requests"].as_array().unwrap().len(),
+            0,
+            "a message from an existing CLI contact must not be a pending request"
+        );
     });
 }
 
@@ -235,6 +290,6 @@ fn accept_unknown_request_id_fails() {
             resp.error.is_some(),
             "accepting an unknown request_id must fail"
         );
-        assert!(bob.contacts_manager().list().unwrap().is_empty());
+        assert!(bob.contacts_store_manager().list().unwrap().is_empty());
     });
 }

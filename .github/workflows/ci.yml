@@ -19,6 +19,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-features -- -D warnings
       - run: cargo install cargo-deny
@@ -34,6 +35,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install libdbus-1-dev (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       # Only Windows runners lack a preinstalled/vendored protoc; matches the
       # manual cross-platform-test.yml dispatch workflow's test-windows job.
       - name: Install protoc (Windows)
@@ -50,6 +54,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - run: cargo doc --workspace --no-deps
 
   ffi-surface:
@@ -59,6 +64,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       # gen_kotlin/gen_swift locate the compiled cdylib by filesystem path at
       # runtime rather than through a Cargo dependency edge, so `cargo run`
       # alone doesn't guarantee it's been built (verified: deleting the

@@ -1,7 +1,8 @@
-package com.scmessenger.android
+package com.scmessenger.android.test
 
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import com.scmessenger.android.MeshApplication
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

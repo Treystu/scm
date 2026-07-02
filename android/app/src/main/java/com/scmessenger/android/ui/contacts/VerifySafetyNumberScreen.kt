@@ -40,6 +40,10 @@ fun VerifySafetyNumberScreen(
     val contact = remember(contacts, contactId) {
         contacts.find { it.peerId == contactId }
     }
+    // T9: collect identity readiness as state so the safetyNumberRaw memo
+    // below re-computes once the identity initializes after first
+    // composition, instead of caching a pre-identity null forever.
+    val identityInfo by viewModel.identityInfo.collectAsState()
 
     Scaffold(
         topBar = {
@@ -63,7 +67,7 @@ fun VerifySafetyNumberScreen(
             return@Scaffold
         }
 
-        val safetyNumber = remember(contact.publicKey) {
+        val safetyNumberRaw = remember(contact.publicKey, identityInfo) {
             viewModel.computeSafetyNumber(contact.publicKey)
         }
         val displayName = contact.localNickname ?: contact.nickname ?: contact.peerId.take(16)
@@ -77,13 +81,24 @@ fun VerifySafetyNumberScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (safetyNumber == null) {
+            if (safetyNumberRaw == null) {
                 Text(
                     text = stringResource(R.string.verify_safety_number_error_no_identity),
                     color = MaterialTheme.colorScheme.error
                 )
                 return@Column
             }
+            // S5: Rust's safetyNumber() returns "" (not an all-zero fallback
+            // number) for malformed keys - that must be a distinct error
+            // state, never rendered or usable to back the verify action.
+            if (safetyNumberRaw.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.verify_safety_number_error_invalid_key_data),
+                    color = MaterialTheme.colorScheme.error
+                )
+                return@Column
+            }
+            val safetyNumber = safetyNumberRaw
 
             Text(
                 text = stringResource(R.string.verify_safety_number_description, displayName),

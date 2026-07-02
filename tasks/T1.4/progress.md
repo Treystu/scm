@@ -32,3 +32,11 @@ state (`is_charging || battery_pct > 50` -> intent 7, else 0) instead of the
 hardcoded 0. Mirrored in `core/src/transport/wifi_direct.rs::compute_group_owner_intent`
 with unit tests covering both branches. Two-device manual test procedure still
 outstanding (hardware-dependent, out of scope for this pass).
+
+## Update (2026-07-02, S8 reconciliation)
+`cargo test --workspace --all-features` and
+`cargo clippy --workspace --all-features -- -D warnings` re-run locally
+against this branch's current state (verified 2026-07-02, local run) - both
+green, no regressions from the intervening readiness-assessment fixes
+(T1-T7, S2-S7). The two-device manual procedure box stays unchecked; it
+requires physical hardware and cannot be verified in this environment.
