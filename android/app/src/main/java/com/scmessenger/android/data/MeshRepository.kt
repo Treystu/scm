@@ -3129,19 +3129,32 @@ open class MeshRepository(
         }
     }
 
-    /** P1_ANDROID_003: Public entry-point for manual identity import from backup string. */
-    fun restoreIdentityFromBackup(backup: String) {
+    /**
+     * P1_ANDROID_003: Public entry-point for manual identity import from backup string.
+     *
+     * If [passphrase] is supplied (the user typed the passphrase they used when
+     * exporting via [exportIdentityBackup]), it is used directly with no fallback —
+     * a wrong user-supplied passphrase should surface as an error, not silently
+     * retry with the device-bound key. If null, falls back to the historical
+     * device-bound-passphrase behavior (for the app's own auto-backup restore flow).
+     */
+    fun restoreIdentityFromBackup(backup: String, passphrase: String? = null) {
         val core = ironCore ?: run {
             Timber.w("restoreIdentityFromBackup: Core not initialized, skipping")
             return
         }
-        try {
-            core.importIdentityBackup(backup, getPlatformSecuredPassphrase())
-            Timber.i("Restored identity from manually pasted backup payload")
-        } catch (e: Exception) {
-            // Fallback for empty passphrase for legacy manually exported backups
-            core.importIdentityBackup(backup, "")
-            Timber.i("Restored identity from manually pasted backup payload using legacy fallback")
+        if (passphrase != null) {
+            core.importIdentityBackup(backup, passphrase)
+            Timber.i("Restored identity from manually pasted backup payload using supplied passphrase")
+        } else {
+            try {
+                core.importIdentityBackup(backup, getPlatformSecuredPassphrase())
+                Timber.i("Restored identity from manually pasted backup payload")
+            } catch (e: Exception) {
+                // Fallback for empty passphrase for legacy manually exported backups
+                core.importIdentityBackup(backup, "")
+                Timber.i("Restored identity from manually pasted backup payload using legacy fallback")
+            }
         }
         // P0_SHARED_IDENTITY: publish the restored identity to all subscribers
         val restored = core.getIdentityInfo()
@@ -3149,6 +3162,17 @@ open class MeshRepository(
             cacheIdentityFields(restored)
         }
         publishIdentityInfo(restored)
+    }
+
+    /**
+     * Export a passphrase-encrypted identity backup: the identity signing key,
+     * active ratchet sessions, and contacts, encrypted with an Argon2id-derived
+     * key. Distinct from [getIdentityExportString], which exports the public
+     * identity card (peer ID / public key / listeners) with no encryption.
+     */
+    fun exportIdentityBackup(passphrase: String): String {
+        val core = ironCore ?: throw IllegalStateException("Core not initialized")
+        return core.exportIdentityBackup(passphrase)
     }
 
     private fun persistIdentityBackup(
