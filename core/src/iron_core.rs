@@ -236,6 +236,16 @@ struct IdentityBackupPayload {
     ratchet_sessions_json: Option<String>,
     #[serde(default)]
     contacts: Vec<Contact>,
+    /// Contacts from the UniFFI mobile bridge's contacts store
+    /// (`contacts_manager()` / `contacts_bridge::ContactManager`), which is
+    /// a separate `contacts.db` from the core `contact_manager` backing
+    /// `contacts` above - Android/iOS clients add contacts through the
+    /// bridge, so without this field a mobile export's address book was
+    /// silently empty/stale on restore. Serialized JSON of
+    /// `Vec<contacts_bridge::Contact>`; `None` on WASM (no bridge there)
+    /// or when the bridge store is empty.
+    #[serde(default)]
+    bridge_contacts_json: Option<String>,
 }
 
 impl Default for IronCore {
@@ -1279,11 +1289,32 @@ impl IronCore {
         let ratchet_sessions_json = self.ratchet_sessions.read().serialize_sessions().ok();
         let contacts = self.contact_manager.read().list()?;
 
+        // The mobile bridge's contacts.db only exists for a persistent
+        // (`with_storage*`) IronCore; an in-memory core has no
+        // `storage_path` and thus no bridge store to read.
+        #[cfg(not(target_arch = "wasm32"))]
+        let bridge_contacts_json = if self.storage_path.is_none() {
+            None
+        } else {
+            let bridge_contacts = self.contacts_manager().list()?;
+            if bridge_contacts.is_empty() {
+                None
+            } else {
+                Some(
+                    serde_json::to_string(&bridge_contacts)
+                        .map_err(|_| IronCoreError::Internal)?,
+                )
+            }
+        };
+        #[cfg(target_arch = "wasm32")]
+        let bridge_contacts_json: Option<String> = None;
+
         let payload = IdentityBackupPayload {
             version: IDENTITY_BACKUP_PAYLOAD_VERSION,
             identity_key_hex,
             ratchet_sessions_json,
             contacts,
+            bridge_contacts_json,
         };
         serde_json::to_string(&payload).map_err(|_| IronCoreError::Internal)
     }
@@ -1348,7 +1379,7 @@ impl IronCore {
         // original format (a bare hex-encoded identity key, no ratchet
         // sessions or contacts) for backups exported before this payload
         // existed.
-        let (key_bytes, ratchet_sessions_json, contacts) =
+        let (key_bytes, ratchet_sessions_json, contacts, bridge_contacts) =
             match serde_json::from_str::<IdentityBackupPayload>(&payload) {
                 Ok(parsed) => {
                     let key_bytes = hex::decode(&parsed.identity_key_hex)
@@ -1362,12 +1393,28 @@ impl IronCore {
                             .deserialize_sessions_strict(json)
                             .map_err(|_| IronCoreError::CorruptionDetected)?;
                     }
-                    (key_bytes, parsed.ratchet_sessions_json, parsed.contacts)
+                    // Validate (without applying) the bridge contacts JSON
+                    // up front too, for the same all-or-nothing reason.
+                    let bridge_contacts = match parsed.bridge_contacts_json {
+                        Some(ref json) => {
+                            let parsed_contacts: Vec<crate::contacts_bridge::Contact> =
+                                serde_json::from_str(json)
+                                    .map_err(|_| IronCoreError::CorruptionDetected)?;
+                            parsed_contacts
+                        }
+                        None => Vec::new(),
+                    };
+                    (
+                        key_bytes,
+                        parsed.ratchet_sessions_json,
+                        parsed.contacts,
+                        bridge_contacts,
+                    )
                 }
                 Err(_) => {
                     let key_bytes =
                         hex::decode(&payload).map_err(|_| IronCoreError::CryptoError)?;
-                    (key_bytes, None, Vec::new())
+                    (key_bytes, None, Vec::new(), Vec::new())
                 }
             };
 
@@ -1388,6 +1435,21 @@ impl IronCore {
             for contact in contacts {
                 contact_manager.add(contact)?;
             }
+        }
+        // Mirror export: only a persistent core has a bridge contacts.db to
+        // restore into. WASM has no contacts_bridge (UniFFI-only) at all.
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.storage_path.is_some() {
+            let bridge = self.contacts_manager();
+            for contact in bridge_contacts {
+                bridge.add(contact)?;
+            }
+        } else {
+            let _ = bridge_contacts;
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = bridge_contacts;
         }
 
         self.audit_log.write().append(

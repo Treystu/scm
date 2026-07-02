@@ -484,6 +484,63 @@ fn iron_core_import_rejects_corrupted_ratchet_session_entry() {
     );
 }
 
+/// T1: `build_identity_backup_payload` used to only read the core's
+/// internal `contact_manager`, but Android/iOS add contacts through the
+/// separate UniFFI-bridge `contacts_manager()` store (`contacts.db`) - a
+/// mobile export's address book was silently empty/stale on restore. This
+/// exercises the actual mobile code path: add a contact via
+/// `contacts_manager()`, export, restore onto a fresh persistent core
+/// (simulating a new device), and confirm the bridge contact - including
+/// `verified_at` - survives.
+#[test]
+fn iron_core_backup_restore_preserves_bridge_contacts() {
+    use tempfile::tempdir;
+
+    let alice_dir = tempdir().unwrap();
+    let alice = IronCore::with_storage(alice_dir.path().to_str().unwrap().to_string());
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+
+    let mut bridge_contact =
+        scmessenger_core::contacts_bridge::Contact::new("bob".to_string(), hex::encode([9u8; 32]));
+    bridge_contact.nickname = Some("Bob".to_string());
+    bridge_contact.verified_at = Some(1_700_000_000);
+    alice
+        .contacts_manager()
+        .add(bridge_contact)
+        .expect("alice adds bob via the bridge contacts store");
+
+    let passphrase = "bridge-contacts-test";
+    let backup = alice
+        .export_identity_backup(passphrase.to_string())
+        .expect("export succeeds");
+
+    // Restore onto a fresh persistent core with its own (empty) bridge
+    // contacts.db, simulating a new device.
+    let restored_dir = tempdir().unwrap();
+    let restored =
+        IronCore::with_storage(restored_dir.path().to_str().unwrap().to_string());
+    restored
+        .import_identity_backup(backup, passphrase.to_string())
+        .expect("import succeeds");
+
+    let restored_contacts = restored
+        .contacts_manager()
+        .list()
+        .expect("restored bridge contacts list");
+    assert_eq!(
+        restored_contacts.len(),
+        1,
+        "bridge contact must survive the backup/restore"
+    );
+    assert_eq!(restored_contacts[0].peer_id, "bob");
+    assert_eq!(
+        restored_contacts[0].verified_at,
+        Some(1_700_000_000),
+        "verified_at must survive the backup/restore intact"
+    );
+}
+
 /// Export and import must each append exactly one audit event of the
 /// corresponding type - this was previously missing entirely on export.
 #[test]
