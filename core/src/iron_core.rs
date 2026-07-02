@@ -1300,10 +1300,7 @@ impl IronCore {
             if bridge_contacts.is_empty() {
                 None
             } else {
-                Some(
-                    serde_json::to_string(&bridge_contacts)
-                        .map_err(|_| IronCoreError::Internal)?,
-                )
+                Some(serde_json::to_string(&bridge_contacts).map_err(|_| IronCoreError::Internal)?)
             }
         };
         #[cfg(target_arch = "wasm32")]

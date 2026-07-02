@@ -141,10 +141,7 @@ fn message_request_lifecycle_accept() {
         // same store the send path (UiCommand::Send) reads from - not the
         // UniFFI-bridge contacts_manager(), which the send path never
         // looks at (T2).
-        let contacts = bob
-            .contacts_store_manager()
-            .list()
-            .expect("list contacts");
+        let contacts = bob.contacts_store_manager().list().expect("list contacts");
         assert_eq!(contacts.len(), 1);
         assert_eq!(contacts[0].peer_id, alice_identity_id);
         assert!(
@@ -213,10 +210,7 @@ fn message_request_lifecycle_reject() {
         );
 
         // And must not have been silently added as a contact.
-        let contacts = bob
-            .contacts_store_manager()
-            .list()
-            .expect("list contacts");
+        let contacts = bob.contacts_store_manager().list().expect("list contacts");
         assert!(contacts.is_empty());
     });
 }

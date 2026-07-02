@@ -518,8 +518,7 @@ fn iron_core_backup_restore_preserves_bridge_contacts() {
     // Restore onto a fresh persistent core with its own (empty) bridge
     // contacts.db, simulating a new device.
     let restored_dir = tempdir().unwrap();
-    let restored =
-        IronCore::with_storage(restored_dir.path().to_str().unwrap().to_string());
+    let restored = IronCore::with_storage(restored_dir.path().to_str().unwrap().to_string());
     restored
         .import_identity_backup(backup, passphrase.to_string())
         .expect("import succeeds");

@@ -103,7 +103,10 @@ impl ContactManager {
             if contact.peer_id.as_bytes() != key.as_slice() {
                 continue;
             }
-            if self.backend.put(&contact_key(&contact.peer_id), &value).is_ok()
+            if self
+                .backend
+                .put(&contact_key(&contact.peer_id), &value)
+                .is_ok()
                 && self.backend.remove(&key).is_ok()
             {
                 migrated += 1;
@@ -502,7 +505,9 @@ mod tests {
         // A record from another subsystem that happens to be valid JSON but
         // is not a Contact (or whose peer_id doesn't match the key) must be
         // left untouched.
-        backend.put(b"some-other-key", br#"{"unrelated":"record"}"#).unwrap();
+        backend
+            .put(b"some-other-key", br#"{"unrelated":"record"}"#)
+            .unwrap();
         let mismatched = Contact::new("actual-peer-id".to_string(), "pk".to_string());
         backend
             .put(b"different-key", &serde_json::to_vec(&mismatched).unwrap())

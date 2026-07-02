@@ -1407,10 +1407,8 @@ pub async fn handle_jsonrpc_request(
 
                 match public_key_hex {
                     Some(public_key) => {
-                        let contact = scmessenger_core::store::Contact::new(
-                            request_id.clone(),
-                            public_key,
-                        );
+                        let contact =
+                            scmessenger_core::store::Contact::new(request_id.clone(), public_key);
                         match core.contacts_store_manager().add(contact) {
                             Ok(()) => {
                                 let mut m = Map::new();

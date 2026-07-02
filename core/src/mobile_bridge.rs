@@ -3236,8 +3236,7 @@ pub fn update_peer_transports(peer_id: String, transports: Vec<ProximityTranspor
 /// Callers must treat "" as an error state, not a value to display.
 #[uniffi::export]
 pub fn safety_number(our_pubkey_hex: String, their_pubkey_hex: String) -> String {
-    crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex)
-        .unwrap_or_default()
+    crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex).unwrap_or_default()
 }
 
 fn current_timestamp() -> u64 {
@@ -3274,10 +3273,7 @@ mod tests {
     /// user could mistakenly "verify".
     #[test]
     fn test_safety_number_returns_empty_string_on_malformed_keys() {
-        assert_eq!(
-            safety_number("not-hex".to_string(), "junk".to_string()),
-            ""
-        );
+        assert_eq!(safety_number("not-hex".to_string(), "junk".to_string()), "");
     }
 
     #[test]
