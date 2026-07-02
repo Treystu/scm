@@ -62,7 +62,7 @@ struct ExportIdentityBackupSheet: View {
                         }
                     }
                     Section {
-                        Button("Export Identity Backup") {
+                        Button(viewModel.isExportingBackup ? "Exporting…" : "Export Identity Backup") {
                             switch validateBackupPassphrase(passphrase, confirmation: confirmation) {
                             case .tooShort:
                                 validationError = "Passphrase must be at least 8 characters"
@@ -73,6 +73,7 @@ struct ExportIdentityBackupSheet: View {
                                 viewModel.exportIdentityBackup(passphrase: passphrase)
                             }
                         }
+                        .disabled(viewModel.isExportingBackup)
                     }
                 }
             }
@@ -121,10 +122,14 @@ struct ImportIdentityBackupSheet: View {
                         Text("Enter the exact passphrase used when this backup was exported.")
                     }
                     Section {
-                        Button("Import") {
+                        Button(viewModel.isImportingBackup ? "Importing…" : "Import") {
                             viewModel.importIdentityBackup(backup: backupText, passphrase: passphrase)
                         }
-                        .disabled(backupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || passphrase.isEmpty)
+                        .disabled(
+                            viewModel.isImportingBackup ||
+                                backupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                passphrase.isEmpty
+                        )
                     }
                 }
             }

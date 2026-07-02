@@ -66,16 +66,34 @@ final class SettingsViewModel {
     // MARK: - Identity Backup (passphrase-encrypted)
 
     var backupExportResult: Result<String, Error>?
+    var isExportingBackup = false
 
     /// Export a passphrase-encrypted identity backup (identity key + ratchet
     /// sessions + contacts). Distinct from `getIdentityExportString()`, which
     /// exports the public identity card with no encryption.
+    ///
+    /// Runs the actual Argon2id-backed encryption off the main actor: the
+    /// repository call goes straight through to a plain (non-actor-isolated)
+    /// UniFFI method that's safe to call from any thread, so doing it here
+    /// synchronously would otherwise freeze the Settings UI for the KDF's
+    /// duration (T16).
     func exportIdentityBackup(passphrase: String) {
-        do {
-            let backup = try repository?.exportIdentityBackup(passphrase: passphrase) ?? ""
-            backupExportResult = .success(backup)
-        } catch {
-            backupExportResult = .failure(error)
+        guard let core = repository?.ironCore else {
+            backupExportResult = .failure(MeshError.notInitialized("IronCore not initialized"))
+            return
+        }
+        isExportingBackup = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result: Result<String, Error>
+            do {
+                result = .success(try core.exportIdentityBackup(passphrase: passphrase))
+            } catch {
+                result = .failure(error)
+            }
+            await MainActor.run {
+                self?.isExportingBackup = false
+                self?.backupExportResult = result
+            }
         }
     }
 
@@ -84,16 +102,38 @@ final class SettingsViewModel {
     }
 
     var backupImportResult: Result<Void, Error>?
+    var isImportingBackup = false
 
-    /// Import an identity backup using a user-supplied passphrase.
+    /// Import an identity backup using a user-supplied passphrase. Same
+    /// off-main-actor treatment as `exportIdentityBackup` (T16); mirrors
+    /// `MeshRepository.importIdentityBackup`'s post-import consent grant.
     func importIdentityBackup(backup: String, passphrase: String) {
-        do {
-            try repository?.importIdentityBackup(backup: backup, passphrase: passphrase)
-            successMessage = "Identity restored successfully"
-            backupImportResult = .success(())
-        } catch {
-            self.error = "Failed to restore identity: \(error.localizedDescription)"
-            backupImportResult = .failure(error)
+        guard let core = repository?.ironCore else {
+            backupImportResult = .failure(MeshError.notInitialized("IronCore not initialized"))
+            return
+        }
+        isImportingBackup = true
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result: Result<Void, Error>
+            do {
+                try core.importIdentityBackup(backup: backup, passphrase: passphrase)
+                if core.getIdentityInfo().initialized {
+                    core.grantConsent()
+                }
+                result = .success(())
+            } catch {
+                result = .failure(error)
+            }
+            await MainActor.run {
+                self?.isImportingBackup = false
+                switch result {
+                case .success:
+                    self?.successMessage = "Identity restored successfully"
+                case .failure(let error):
+                    self?.error = "Failed to restore identity: \(error.localizedDescription)"
+                }
+                self?.backupImportResult = result
+            }
         }
     }
 
