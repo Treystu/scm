@@ -301,7 +301,7 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
         .write()
         .get_or_create_session(
             "bob",
-            &alice.identity_signing_key_for_test(),
+            &alice.test_only_identity_signing_key(),
             &bob_x25519_pub,
         )
         .expect("alice creates sender session");
@@ -313,7 +313,7 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
         let mut guard = sessions.write();
         let session = guard.get_session_mut("bob").expect("alice session exists");
         encrypt_message_ratcheted(
-            &alice.identity_signing_key_for_test(),
+            &alice.test_only_identity_signing_key(),
             session,
             b"hello bob, before backup",
         )
@@ -376,7 +376,7 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
             .get_session_mut("bob")
             .expect("restored session exists");
         encrypt_message_ratcheted(
-            &alice_restored.identity_signing_key_for_test(),
+            &alice_restored.test_only_identity_signing_key(),
             session,
             b"hello bob, after restore",
         )
@@ -448,7 +448,7 @@ fn iron_core_import_rejects_corrupted_ratchet_session_entry() {
     let alice = IronCore::new();
     alice.grant_consent();
     alice.initialize_identity().expect("alice identity init");
-    let identity_key_hex = hex::encode(alice.identity_signing_key_for_test().to_bytes());
+    let identity_key_hex = hex::encode(alice.test_only_identity_signing_key().to_bytes());
 
     let zero_hex = hex::encode([0u8; 32]);
     let corrupted_sessions_json = format!(

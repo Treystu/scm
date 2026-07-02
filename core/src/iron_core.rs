@@ -2447,7 +2447,13 @@ impl IronCore {
     /// Test-only: the initialized identity's Ed25519 signing key, for tests
     /// that drive `crypto::ratchet`/`crypto::encrypt` functions directly
     /// (see T4.5). Panics if the identity hasn't been initialized.
-    pub fn identity_signing_key_for_test(&self) -> ed25519_dalek::SigningKey {
+    ///
+    /// Hands out a clone of the private signing key, so this is not
+    /// `#[cfg(test)]` (integration tests in `core/tests/` need it, and
+    /// `cfg(test)` doesn't apply there) but is `#[doc(hidden)]` and
+    /// unmistakably named so it isn't reachable by accident (S6).
+    #[doc(hidden)]
+    pub fn test_only_identity_signing_key(&self) -> ed25519_dalek::SigningKey {
         self.identity
             .read()
             .keys()
