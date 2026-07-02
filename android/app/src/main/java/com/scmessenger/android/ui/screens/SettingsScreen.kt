@@ -162,7 +162,11 @@ fun SettingsScreen(
                     }
                 },
                 onShowIdentityQr = onNavigateToIdentity,
-                onImportIdentity = { showImportDialog = true },
+                onImportIdentity = {
+                    importText = ""
+                    importPassphrase = ""
+                    showImportDialog = true
+                },
                 onExportIdentityBackup = {
                     exportPassphrase = ""
                     exportPassphraseConfirm = ""
