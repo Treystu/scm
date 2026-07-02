@@ -643,6 +643,13 @@ class ContactsViewModel @Inject constructor(
     }
 
     /**
+     * Our own identity's readiness, so UI that depends on [computeSafetyNumber]
+     * (which needs our identity's public key) can key off of it becoming
+     * available after first composition (T9).
+     */
+    val identityInfo: StateFlow<uniffi.api.IdentityInfo?> = meshRepository.identityInfo
+
+    /**
      * Update contact device ID (for multi-device tracking).
      *
      * @param peerId The peer ID

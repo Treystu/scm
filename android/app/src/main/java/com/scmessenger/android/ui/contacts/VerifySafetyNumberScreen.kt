@@ -40,6 +40,10 @@ fun VerifySafetyNumberScreen(
     val contact = remember(contacts, contactId) {
         contacts.find { it.peerId == contactId }
     }
+    // T9: collect identity readiness as state so the safetyNumberRaw memo
+    // below re-computes once the identity initializes after first
+    // composition, instead of caching a pre-identity null forever.
+    val identityInfo by viewModel.identityInfo.collectAsState()
 
     Scaffold(
         topBar = {
@@ -63,7 +67,7 @@ fun VerifySafetyNumberScreen(
             return@Scaffold
         }
 
-        val safetyNumberRaw = remember(contact.publicKey) {
+        val safetyNumberRaw = remember(contact.publicKey, identityInfo) {
             viewModel.computeSafetyNumber(contact.publicKey)
         }
         val displayName = contact.localNickname ?: contact.nickname ?: contact.peerId.take(16)
