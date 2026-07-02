@@ -1815,10 +1815,25 @@ impl PlatformWifiAwareBridge {
     }
 
     pub fn handle_data_path_confirmed(&self, peer_id: String, ip_address: String, port: u16) {
-        if let Ok(addr) = format!("{}:{}", ip_address, port).parse::<std::net::SocketAddr>() {
-            let mut results = self.data_path_results.lock();
-            if let Some(tx) = results.remove(&peer_id) {
-                let _ = tx.send(addr);
+        // Build SocketAddr from the parsed IpAddr rather than formatting
+        // "ip:port" and parsing that as a whole: an unbracketed IPv6 string
+        // formatted that way (e.g. "fe80::1234:8765") is not valid SocketAddr
+        // syntax (IPv6 needs "[ip]:port"), so every IPv6 confirmation would
+        // silently fail to parse and never resolve create_data_path's future.
+        match ip_address.parse::<std::net::IpAddr>() {
+            Ok(ip) => {
+                let addr = std::net::SocketAddr::new(ip, port);
+                let mut results = self.data_path_results.lock();
+                if let Some(tx) = results.remove(&peer_id) {
+                    let _ = tx.send(addr);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "WiFi Aware data path confirmed with unparseable IP '{}': {}",
+                    ip_address,
+                    e
+                );
             }
         }
     }
@@ -3264,6 +3279,71 @@ mod tests {
             second_keypair.public().to_peer_id(),
             "headless key should be stable across restarts"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // PlatformWifiAwareBridge::handle_data_path_confirmed tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_handle_data_path_confirmed_resolves_ipv4() {
+        let bridge = PlatformWifiAwareBridge::new_platform_ref(Arc::new(Mutex::new(None)));
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        bridge
+            .data_path_results
+            .lock()
+            .insert("peer-1".to_string(), tx);
+
+        bridge.handle_data_path_confirmed("peer-1".to_string(), "127.0.0.1".to_string(), 4242);
+
+        let addr = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(rx)
+            .expect("oneshot must resolve");
+        assert_eq!(addr, "127.0.0.1:4242".parse().unwrap());
+    }
+
+    #[test]
+    fn test_handle_data_path_confirmed_resolves_ipv6_link_local() {
+        // Regression test: building SocketAddr via format!("{ip}:{port}") and
+        // parsing the whole string fails for any IPv6 address (needs
+        // "[ip]:port" bracket syntax), so this used to silently swallow every
+        // WiFi Aware confirmation with an IPv6 address and time out.
+        let bridge = PlatformWifiAwareBridge::new_platform_ref(Arc::new(Mutex::new(None)));
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        bridge
+            .data_path_results
+            .lock()
+            .insert("peer-2".to_string(), tx);
+
+        bridge.handle_data_path_confirmed("peer-2".to_string(), "fe80::1234".to_string(), 8765);
+
+        let addr = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(rx)
+            .expect("oneshot must resolve for an IPv6 address");
+        assert_eq!(addr, "[fe80::1234]:8765".parse().unwrap());
+    }
+
+    #[test]
+    fn test_handle_data_path_confirmed_ignores_unparseable_ip_without_panicking() {
+        let bridge = PlatformWifiAwareBridge::new_platform_ref(Arc::new(Mutex::new(None)));
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        bridge
+            .data_path_results
+            .lock()
+            .insert("peer-3".to_string(), tx);
+
+        bridge.handle_data_path_confirmed("peer-3".to_string(), "not-an-ip".to_string(), 1);
+
+        // A malformed IP must not resolve (or drop) the pending confirmation:
+        // the sender is left in place in data_path_results, matching the
+        // original pre-fix behavior for a parse failure.
+        assert!(
+            rx.try_recv().is_err(),
+            "malformed IP must not resolve the pending confirmation"
+        );
+        assert!(bridge.data_path_results.lock().contains_key("peer-3"));
     }
 
     #[test]
