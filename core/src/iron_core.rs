@@ -192,6 +192,17 @@ pub struct IronCore {
     #[cfg(not(target_arch = "wasm32"))]
     bootstrap_manager: Arc<RwLock<Option<BootstrapManager>>>,
 
+    /// Transport-layer relay health/circuit-breaker/fallback-relay tracker.
+    /// Distinct from `bootstrap_manager` above (the QR-code/invite workflow
+    /// manager): this one holds the relay discovery, circuit breaker, and
+    /// fallback-relay-address state that `get_all_relay_stats`,
+    /// `get_fallback_relays`, and `get_healthy_relays` report on. Constructed
+    /// eagerly with defaults since it needs no identity/network setup to be
+    /// useful (fallback relay addresses are static/env-derived); health and
+    /// stats stay empty until something feeds it real dial events.
+    #[cfg(not(target_arch = "wasm32"))]
+    relay_bootstrap_manager: Arc<RwLock<Option<crate::transport::bootstrap::BootstrapManager>>>,
+
     /// Peer exchange manager for relay peer discovery.
     #[cfg(not(target_arch = "wasm32"))]
     peer_exchange_manager: Arc<RwLock<PeerExchangeManager>>,
@@ -301,6 +312,10 @@ impl IronCore {
             #[cfg(not(target_arch = "wasm32"))]
             bootstrap_manager: Arc::new(RwLock::new(None)),
             #[cfg(not(target_arch = "wasm32"))]
+            relay_bootstrap_manager: Arc::new(RwLock::new(Some(
+                crate::transport::bootstrap::BootstrapManager::with_defaults(),
+            ))),
+            #[cfg(not(target_arch = "wasm32"))]
             peer_exchange_manager: Arc::new(RwLock::new(PeerExchangeManager::new())),
             ratchet_sessions,
             security_audit_pipeline,
@@ -384,6 +399,10 @@ impl IronCore {
             #[cfg(not(target_arch = "wasm32"))]
             bootstrap_manager: Arc::new(RwLock::new(None)),
             #[cfg(not(target_arch = "wasm32"))]
+            relay_bootstrap_manager: Arc::new(RwLock::new(Some(
+                crate::transport::bootstrap::BootstrapManager::with_defaults(),
+            ))),
+            #[cfg(not(target_arch = "wasm32"))]
             peer_exchange_manager: Arc::new(RwLock::new(PeerExchangeManager::new())),
             ratchet_sessions: Arc::new(RwLock::new(RatchetSessionManager::new())),
             security_audit_pipeline,
@@ -466,6 +485,10 @@ impl IronCore {
             transport_manager: Arc::new(RwLock::new(TransportManager::new())),
             #[cfg(not(target_arch = "wasm32"))]
             bootstrap_manager: Arc::new(RwLock::new(None)),
+            #[cfg(not(target_arch = "wasm32"))]
+            relay_bootstrap_manager: Arc::new(RwLock::new(Some(
+                crate::transport::bootstrap::BootstrapManager::with_defaults(),
+            ))),
             #[cfg(not(target_arch = "wasm32"))]
             peer_exchange_manager: Arc::new(RwLock::new(PeerExchangeManager::new())),
             ratchet_sessions: Arc::new(RwLock::new(RatchetSessionManager::new())),
@@ -2748,48 +2771,66 @@ impl IronCore {
             .and_then(|e| e.adaptive_ttl().get_activity(peer_id).cloned())
     }
 
+    /// Access the transport-layer relay bootstrap manager backing the
+    /// relay-diagnostics methods below. Mirrors `routing_engine_handle()`:
+    /// external code (e.g. the swarm event loop) can use this to feed real
+    /// dial success/failure events into the same instance these methods
+    /// report on, once such wiring exists.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn relay_bootstrap_manager_handle(
+        &self,
+    ) -> Arc<RwLock<Option<crate::transport::bootstrap::BootstrapManager>>> {
+        self.relay_bootstrap_manager.clone()
+    }
+
     /// Get all relay statistics from the relay discovery system.
-    /// Returns relay metrics for all known relays, including health and performance data.
-    /// Returns an empty list if no bootstrap manager is initialized.
-    /// Note: This function is not currently implemented due to BootstrapManager
-    /// structure mismatch. The relay discovery is in transport/BootstrapManager,
-    /// but iron_core stores relay/BootstrapManager.
+    /// Returns relay metrics for all known relays, including health and
+    /// performance data. Empty until dial attempts have been recorded via
+    /// `relay_bootstrap_manager_handle()` — no live swarm wiring feeds this
+    /// yet, so absence of stats means "no data recorded," not "unhealthy."
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_all_relay_stats(
         &self,
     ) -> Vec<(libp2p::PeerId, crate::transport::relay_health::RelayMetrics)> {
-        std::collections::HashMap::new().into_iter().collect()
+        self.relay_bootstrap_manager
+            .read()
+            .as_ref()
+            .map(|mgr| mgr.get_all_relay_stats())
+            .unwrap_or_default()
     }
 
-    /// Get fallback relay addresses from the bootstrap manager.
-    /// Returns an empty list if no bootstrap manager is initialized.
-    /// Note: This function is not currently implemented due to BootstrapManager
-    /// structure mismatch. The relay discovery is in transport/BootstrapManager,
-    /// but iron_core stores relay/BootstrapManager.
+    /// Get fallback relay addresses from the bootstrap manager: the
+    /// hardcoded `CORE_BOOTSTRAP_NODES` plus any environment-variable
+    /// overrides, available immediately without needing live swarm events.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_fallback_relays(&self) -> Vec<libp2p::Multiaddr> {
-        Vec::new()
+        self.relay_bootstrap_manager
+            .read()
+            .as_ref()
+            .map(|mgr| mgr.get_fallback_relay_addresses())
+            .unwrap_or_default()
     }
 
-    /// Check if this node can bootstrap other peers into the mesh.
-    /// Returns `false` if no bootstrap manager is initialized.
-    /// Note: This function is not currently implemented due to BootstrapManager
-    /// structure mismatch. The relay discovery is in transport/BootstrapManager,
-    /// but iron_core stores relay/BootstrapManager.
+    /// Check if this node can act as a bootstrap peer for others: it must
+    /// be running with an initialized identity. Mirrors
+    /// `swarm_can_bootstrap_others()`, the established definition of the
+    /// same condition elsewhere in this file.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn can_bootstrap_others(&self) -> bool {
-        false
+        self.swarm_can_bootstrap_others()
     }
 
     /// Get healthy relays from the circuit breaker.
-    /// Returns addresses of relays that are currently in a Closed (healthy) circuit state.
-    /// Returns an empty list if no bootstrap manager is initialized.
-    /// Note: This function is not currently implemented due to BootstrapManager
-    /// structure mismatch. The relay discovery is in transport/BootstrapManager,
-    /// but iron_core stores relay/BootstrapManager.
+    /// Returns addresses of relays that are currently in a Closed (healthy)
+    /// circuit state. Empty until failures/successes have been recorded via
+    /// `relay_bootstrap_manager_handle()`.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_healthy_relays(&self) -> Vec<String> {
-        Vec::new()
+        self.relay_bootstrap_manager
+            .read()
+            .as_ref()
+            .map(|mgr| mgr.get_healthy_relays())
+            .unwrap_or_default()
     }
 
     /// Get relay custody audit count for diagnostics (usize variant).
