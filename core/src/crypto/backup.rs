@@ -285,20 +285,24 @@ mod tests {
         assert_eq!(data.first(), Some(&FORMAT_TAG_ARGON2ID));
     }
 
-    /// Argon2id is memory-hard: deriving a key must take meaningfully longer
-    /// than a cheap hash (blake3/sha256 take microseconds), evidencing that
-    /// real memory-hard work (not just a fast HMAC loop) is happening.
+    /// T7: a wall-clock ">= 5ms" assertion is flaky by construction (will
+    /// eventually miss on a fast/loaded machine) and can pass vacuously if
+    /// the KDF ever silently regressed to something weak but still slow.
+    /// Argon2id with fixed params is deterministic, so assert the exact
+    /// derived key bytes instead - this both fails fast if the params or
+    /// algorithm ever change unintentionally and is not timing-sensitive.
+    /// Known-answer computed once with these exact inputs and params
+    /// (Argon2id, 19 MiB, t=2, p=1) and re-verified by running this test
+    /// twice in a row with identical results.
     #[test]
     fn test_kdf_is_memory_hard() {
-        let start = std::time::Instant::now();
-        let _ = derive_key_argon2id("some-passphrase", b"0123456789abcdef").unwrap();
-        let elapsed = start.elapsed();
-
-        assert!(
-            elapsed.as_millis() >= 5,
-            "Argon2id derivation completed in {:?}, suspiciously fast for a \
-             19 MiB memory-hard KDF - is this actually calling Argon2id?",
-            elapsed
+        let key = derive_key_argon2id("some-passphrase", b"0123456789abcdef").unwrap();
+        assert_eq!(
+            hex::encode(key),
+            "b15d39bb30bbb22dce599bce9286bbe137a89c28440f72b302b35fd791a8cce6",
+            "Argon2id(19 MiB, t=2, p=1) derived key for these fixed inputs \
+             changed - either the KDF params/algorithm regressed, or this \
+             known-answer needs updating alongside an intentional change"
         );
     }
 
