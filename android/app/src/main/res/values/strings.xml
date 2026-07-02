@@ -370,6 +370,17 @@
     <string name="contact_detail_label_added">Added</string>
     <string name="contact_detail_label_last_seen">Last Seen</string>
     <string name="contact_detail_label_notes">Notes:</string>
+    <string name="contact_detail_action_verify_safety_number">Verify Safety Number</string>
+    <string name="contact_detail_status_verified">Verified</string>
+    <string name="contact_detail_status_unverified">Not verified</string>
+
+    <string name="verify_safety_number_title">Verify Safety Number</string>
+    <string name="verify_safety_number_description">Compare this number with %1$s, in person or through another trusted channel. If they match, your conversation is secure from eavesdropping.</string>
+    <string name="verify_safety_number_qr_content_description">Safety number QR code</string>
+    <string name="verify_safety_number_action_mark_verified">Mark as Verified</string>
+    <string name="verify_safety_number_action_clear_verification">Clear Verification</string>
+    <string name="verify_safety_number_verified_since">Verified on %1$s</string>
+    <string name="verify_safety_number_error_no_identity">Your identity isn\'t initialized yet</string>
 
     <!-- Add Contact Screen Extensions -->
     <string name="add_contact_tab_manual">Manual Entry</string>

@@ -3734,6 +3734,27 @@ open class MeshRepository(
         Timber.d("Contact nickname updated: $peerId -> $nickname")
     }
 
+    /** Mark a contact as verified after an out-of-band safety-number comparison. */
+    fun markContactVerified(peerId: String) {
+        contactManager?.markVerified(peerId)
+        Timber.d("Contact marked verified: $peerId")
+    }
+
+    /** Clear a contact's verification status (e.g. after a key change). */
+    fun unverifyContact(peerId: String) {
+        contactManager?.unverify(peerId)
+        Timber.d("Contact verification cleared: $peerId")
+    }
+
+    /**
+     * Compute the Signal-style safety number for comparing identities with [theirPublicKeyHex]
+     * out-of-band. Returns null if our own identity isn't initialized yet.
+     */
+    fun computeSafetyNumber(theirPublicKeyHex: String): String? {
+        val ourKey = identityInfo.value?.publicKeyHex ?: return null
+        return uniffi.api.safetyNumber(ourKey, theirPublicKeyHex)
+    }
+
     fun getContactCount(): UInt {
         return contactManager?.count() ?: 0u
     }
