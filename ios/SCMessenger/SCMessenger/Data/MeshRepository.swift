@@ -2921,6 +2921,32 @@ final class MeshRepository {
         return contactManager.count()
     }
 
+    /// Mark a contact as verified after an out-of-band safety-number comparison.
+    func markContactVerified(peerId: String) throws {
+        guard let contactManager = contactManager else {
+            throw MeshError.notInitialized("ContactManager not initialized")
+        }
+        try contactManager.markVerified(peerId: peerId)
+        logger.info("✓ Contact marked verified: \(peerId)")
+    }
+
+    /// Clear a contact's verification status (e.g. after a key change).
+    func unverifyContact(peerId: String) throws {
+        guard let contactManager = contactManager else {
+            throw MeshError.notInitialized("ContactManager not initialized")
+        }
+        try contactManager.unverify(peerId: peerId)
+        logger.info("✓ Contact verification cleared: \(peerId)")
+    }
+
+    /// Compute the Signal-style safety number for comparing identities with
+    /// `theirPublicKeyHex` out-of-band. Returns nil if our own identity isn't
+    /// initialized yet.
+    func computeSafetyNumber(theirPublicKeyHex: String) -> String? {
+        guard let ourKey = getIdentityInfo()?.publicKeyHex else { return nil }
+        return safetyNumber(ourPubkeyHex: ourKey, theirPubkeyHex: theirPublicKeyHex)
+    }
+
     // MARK: - Message History
 
     func getConversation(peerId: String, limit: UInt32 = 100) throws -> [MessageRecord] {
@@ -6166,6 +6192,31 @@ final class MeshRepository {
 
     func getFullIdentityInfo() -> IdentityInfo? {
         return ironCore?.getIdentityInfo()
+    }
+
+    /// Export a passphrase-encrypted identity backup: the identity signing
+    /// key, active ratchet sessions, and contacts, encrypted with an
+    /// Argon2id-derived key. Distinct from `getIdentityExportString()`,
+    /// which exports the public identity card with no encryption.
+    func exportIdentityBackup(passphrase: String) throws -> String {
+        guard let ironCore else {
+            throw MeshError.notInitialized("IronCore not initialized")
+        }
+        return try ironCore.exportIdentityBackup(passphrase: passphrase)
+    }
+
+    /// Import an identity backup using a passphrase the user supplied
+    /// directly (as opposed to the device-bound Keychain auto-backup
+    /// passphrase used internally by `restoreIdentityFromKeychain`). A
+    /// wrong passphrase surfaces as an error with no fallback.
+    func importIdentityBackup(backup: String, passphrase: String) throws {
+        guard let ironCore else {
+            throw MeshError.notInitialized("IronCore not initialized")
+        }
+        try ironCore.importIdentityBackup(backup: backup, passphrase: passphrase)
+        if ironCore.getIdentityInfo().initialized {
+            ironCore.grantConsent()
+        }
     }
 
     func getIdentityExportString() -> String {

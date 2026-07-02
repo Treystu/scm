@@ -1,7 +1,5 @@
 package com.scmessenger.android.ui.identity
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,21 +10,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import com.scmessenger.android.R
 import com.scmessenger.android.ui.components.CopyableText
 import com.scmessenger.android.ui.components.ErrorBanner
 import com.scmessenger.android.ui.components.IdenticonFromPeerId
 import com.scmessenger.android.ui.viewmodels.IdentityViewModel
-import timber.log.Timber
 
 import com.scmessenger.android.data.IdentityState
 
@@ -330,8 +324,9 @@ private fun IdentityContent(
 
         // QR Code
         qrCodeData?.let { data ->
-            QRCodeDisplay(
+            com.scmessenger.android.ui.components.QrCodeImage(
                 data = data,
+                contentDescription = stringResource(R.string.identity_label_qr_code),
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
         }
@@ -392,56 +387,3 @@ private fun IdentityContent(
     }
 }
 
-/**
- * QR Code display component.
- */
-@Composable
-private fun QRCodeDisplay(
-    data: String,
-    modifier: Modifier = Modifier
-) {
-    val bitmap = remember(data) {
-        try {
-            generateQRCode(data, 512)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to generate QR code")
-            null
-        }
-    }
-
-    bitmap?.let {
-        Card(modifier = modifier) {
-            Image(
-                bitmap = it.asImageBitmap(),
-                contentDescription = stringResource(R.string.identity_label_qr_code),
-                modifier = Modifier
-                    .size(256.dp)
-                    .padding(16.dp)
-            )
-        }
-    }
-}
-
-/**
- * Generate QR code bitmap from string data.
- */
-private fun generateQRCode(data: String, size: Int): Bitmap {
-    val writer = QRCodeWriter()
-    val bitMatrix = writer.encode(data, BarcodeFormat.QR_CODE, size, size)
-
-    val width = bitMatrix.width
-    val height = bitMatrix.height
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-
-    for (x in 0 until width) {
-        for (y in 0 until height) {
-            bitmap.setPixel(
-                x,
-                y,
-                if (bitMatrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
-            )
-        }
-    }
-
-    return bitmap
-}

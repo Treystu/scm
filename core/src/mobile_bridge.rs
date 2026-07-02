@@ -1332,7 +1332,7 @@ impl MeshService {
                         } else {
                             format!("/ip4/{}/tcp/{}", path_info.ip_address, path_info.port)
                         };
-                        let _ = swarm_bridge.dial(multiaddr_str);
+                        let _ = swarm_bridge.dial_async(multiaddr_str).await;
                     }
                 }
             });
@@ -1398,7 +1398,7 @@ impl MeshService {
             let rt = swarm_bridge.get_runtime_handle();
             rt.spawn(async move {
                 let multiaddr_str = format!("/ip4/{}/tcp/9001", group_owner_ip);
-                let _ = swarm_bridge.dial(multiaddr_str);
+                let _ = swarm_bridge.dial_async(multiaddr_str).await;
             });
         }
     }
@@ -1782,7 +1782,7 @@ pub trait WifiAwareCallback: Send + Sync {
 pub struct PlatformWifiAwareBridge {
     platform_bridge: std::sync::Arc<Mutex<Option<Box<dyn PlatformBridge>>>>,
     discovered_peers: Arc<Mutex<HashMap<String, (Vec<u8>, i32)>>>,
-    data_path_results: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<std::net::SocketAddr>>>>,
+    data_path_results: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<std::net::SocketAddr>>>>,
     on_service_discovered: Arc<Mutex<Option<Box<dyn Fn(String, Vec<u8>, i32) + Send + Sync>>>>,
 }
 
@@ -1815,10 +1815,25 @@ impl PlatformWifiAwareBridge {
     }
 
     pub fn handle_data_path_confirmed(&self, peer_id: String, ip_address: String, port: u16) {
-        if let Ok(addr) = format!("{}:{}", ip_address, port).parse::<std::net::SocketAddr>() {
-            let mut results = self.data_path_results.lock();
-            if let Some(tx) = results.remove(&peer_id) {
-                let _ = tx.send(addr);
+        // Build SocketAddr from the parsed IpAddr rather than formatting
+        // "ip:port" and parsing that as a whole: an unbracketed IPv6 string
+        // formatted that way (e.g. "fe80::1234:8765") is not valid SocketAddr
+        // syntax (IPv6 needs "[ip]:port"), so every IPv6 confirmation would
+        // silently fail to parse and never resolve create_data_path's future.
+        match ip_address.parse::<std::net::IpAddr>() {
+            Ok(ip) => {
+                let addr = std::net::SocketAddr::new(ip, port);
+                let mut results = self.data_path_results.lock();
+                if let Some(tx) = results.remove(&peer_id) {
+                    let _ = tx.send(addr);
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "WiFi Aware data path confirmed with unparseable IP '{}': {}",
+                    ip_address,
+                    e
+                );
             }
         }
     }
@@ -1885,7 +1900,7 @@ impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
         peer_id: &str,
         pmk: &[u8; 32],
     ) -> Result<std::net::SocketAddr, WifiAwareError> {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = tokio::sync::oneshot::channel();
         self.data_path_results
             .lock()
             .insert(peer_id.to_string(), tx);
@@ -1901,11 +1916,17 @@ impl WifiAwarePlatformBridge for PlatformWifiAwareBridge {
             ));
         }
 
-        rx.recv_timeout(std::time::Duration::from_secs(30))
+        // Await (not block) the confirmation: this runs on a shared tokio
+        // worker thread, and a blocking wait here would starve other tasks
+        // (including the swarm's own event loop) whenever multiple peers are
+        // discovered concurrently.
+        tokio::time::timeout(std::time::Duration::from_secs(30), rx)
+            .await
             .map_err(|_| {
                 self.data_path_results.lock().remove(peer_id);
                 WifiAwareError::DataPathFailed("Data path confirmation timed out".into())
-            })
+            })?
+            .map_err(|_| WifiAwareError::DataPathFailed("Confirmation sender dropped".into()))
     }
 
     async fn close_data_path(&self, _peer_id: &str) -> Result<(), WifiAwareError> {
@@ -2937,6 +2958,11 @@ impl SwarmBridge {
     }
 
     /// Dial a peer at a multiaddress.
+    ///
+    /// For FFI/sync callers only. Calling this from within an already-running
+    /// tokio task (e.g. a `rt.spawn`'d future) panics ("Cannot start a
+    /// runtime from within a runtime") because it blocks on the same
+    /// runtime that's driving the caller — use `dial_async` there instead.
     pub fn dial(&self, multiaddr: String) -> Result<(), crate::IronCoreError> {
         let handle = self
             .handle
@@ -2949,6 +2975,27 @@ impl SwarmBridge {
 
         let rt = self.get_runtime_handle();
         rt.block_on(handle.dial(addr))
+            .map_err(|_| crate::IronCoreError::NetworkError)
+    }
+
+    /// Dial a peer at a multiaddress from within an already-running async
+    /// context (e.g. a task spawned to react to a proximity-transport
+    /// discovery callback). Awaits the dial directly instead of blocking the
+    /// current worker thread on it, so it's safe to call from `rt.spawn`'d
+    /// futures where `dial` is not.
+    pub(crate) async fn dial_async(&self, multiaddr: String) -> Result<(), crate::IronCoreError> {
+        let handle = self
+            .handle
+            .lock()
+            .clone()
+            .ok_or(crate::IronCoreError::NetworkError)?;
+
+        let addr =
+            Multiaddr::from_str(&multiaddr).map_err(|_| crate::IronCoreError::InvalidInput)?;
+
+        handle
+            .dial(addr)
+            .await
             .map_err(|_| crate::IronCoreError::NetworkError)
     }
 
@@ -3158,6 +3205,7 @@ pub fn update_peer_transports(peer_id: String, transports: Vec<ProximityTranspor
 
 /// Generate a Signal-style safety number from two public keys (Ed25519 hex).
 /// Returns a 60-digit numeric string. Order-independent so both sides match.
+#[uniffi::export]
 pub fn safety_number(our_pubkey_hex: String, their_pubkey_hex: String) -> String {
     crate::identity::keys::safety_number(&our_pubkey_hex, &their_pubkey_hex).unwrap_or_else(|_| {
         "00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000 00000".to_string()
@@ -3231,6 +3279,71 @@ mod tests {
             second_keypair.public().to_peer_id(),
             "headless key should be stable across restarts"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // PlatformWifiAwareBridge::handle_data_path_confirmed tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_handle_data_path_confirmed_resolves_ipv4() {
+        let bridge = PlatformWifiAwareBridge::new_platform_ref(Arc::new(Mutex::new(None)));
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        bridge
+            .data_path_results
+            .lock()
+            .insert("peer-1".to_string(), tx);
+
+        bridge.handle_data_path_confirmed("peer-1".to_string(), "127.0.0.1".to_string(), 4242);
+
+        let addr = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(rx)
+            .expect("oneshot must resolve");
+        assert_eq!(addr, "127.0.0.1:4242".parse().unwrap());
+    }
+
+    #[test]
+    fn test_handle_data_path_confirmed_resolves_ipv6_link_local() {
+        // Regression test: building SocketAddr via format!("{ip}:{port}") and
+        // parsing the whole string fails for any IPv6 address (needs
+        // "[ip]:port" bracket syntax), so this used to silently swallow every
+        // WiFi Aware confirmation with an IPv6 address and time out.
+        let bridge = PlatformWifiAwareBridge::new_platform_ref(Arc::new(Mutex::new(None)));
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        bridge
+            .data_path_results
+            .lock()
+            .insert("peer-2".to_string(), tx);
+
+        bridge.handle_data_path_confirmed("peer-2".to_string(), "fe80::1234".to_string(), 8765);
+
+        let addr = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(rx)
+            .expect("oneshot must resolve for an IPv6 address");
+        assert_eq!(addr, "[fe80::1234]:8765".parse().unwrap());
+    }
+
+    #[test]
+    fn test_handle_data_path_confirmed_ignores_unparseable_ip_without_panicking() {
+        let bridge = PlatformWifiAwareBridge::new_platform_ref(Arc::new(Mutex::new(None)));
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
+        bridge
+            .data_path_results
+            .lock()
+            .insert("peer-3".to_string(), tx);
+
+        bridge.handle_data_path_confirmed("peer-3".to_string(), "not-an-ip".to_string(), 1);
+
+        // A malformed IP must not resolve (or drop) the pending confirmation:
+        // the sender is left in place in data_path_results, matching the
+        // original pre-fix behavior for a parse failure.
+        assert!(
+            rx.try_recv().is_err(),
+            "malformed IP must not resolve the pending confirmation"
+        );
+        assert!(bridge.data_path_results.lock().contains_key("peer-3"));
     }
 
     #[test]

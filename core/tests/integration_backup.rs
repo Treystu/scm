@@ -4,12 +4,18 @@
 /// 1. Identity backup export/import roundtrips correctly
 /// 2. Ratchet sessions survive backup/restore
 /// 3. Tampered blobs return CorruptionDetected
-/// 4. KDF is memory-hard (PBKDF2 600K iterations)
+/// 4. KDF is memory-hard (Argon2id)
 /// 5. Audit events are emitted for export/import
 use scmessenger_core::crypto::backup::{decrypt_backup, encrypt_backup};
-use scmessenger_core::crypto::RatchetSessionManager;
+use scmessenger_core::crypto::{
+    decrypt_message_ratcheted, ed25519_public_to_x25519, encrypt_message_ratcheted,
+    RatchetSessionManager,
+};
 use scmessenger_core::identity::IdentityManager;
+use scmessenger_core::observability::AuditEventType;
 use scmessenger_core::store::backend::MemoryStorage;
+use scmessenger_core::store::Contact;
+use scmessenger_core::IronCore;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -245,4 +251,222 @@ fn backup_full_state_integration() {
             i
         );
     }
+}
+
+// ============================================================================
+// T4.5 — end-to-end backup/restore through the real IronCore public API
+// (the tests above exercise the lower-level backup.rs/RatchetSessionManager
+// primitives directly; these exercise IronCore::export_identity_backup /
+// import_identity_backup, which is what the mobile/CLI clients actually call).
+// ============================================================================
+
+/// Export a full identity backup (identity + ratchet session + contact) from
+/// Alice, import it into a fresh IronCore, and confirm the restored session
+/// can decrypt the *next* ratchet message from Bob's still-live session -
+/// i.e. the conversation continues seamlessly after a restore, not just that
+/// the serialized bytes round-trip.
+#[test]
+fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
+    let alice = IronCore::new();
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+    let alice_signing_key = alice
+        .get_identity_info()
+        .public_key_hex
+        .clone()
+        .expect("alice pubkey");
+
+    let bob = IronCore::new();
+    bob.grant_consent();
+    bob.initialize_identity().expect("bob identity init");
+    let bob_pub_hex = bob.get_identity_info().public_key_hex.expect("bob pubkey");
+    let bob_pub_bytes: [u8; 32] = hex::decode(&bob_pub_hex)
+        .expect("bob pubkey is hex")
+        .try_into()
+        .expect("bob pubkey is 32 bytes");
+    let bob_x25519_pub = ed25519_public_to_x25519(&bob_pub_bytes).expect("bob x25519 conversion");
+
+    let alice_pub_bytes: [u8; 32] = hex::decode(&alice_signing_key)
+        .expect("alice pubkey is hex")
+        .try_into()
+        .expect("alice pubkey is 32 bytes");
+    let alice_x25519_pub =
+        ed25519_public_to_x25519(&alice_pub_bytes).expect("alice x25519 conversion");
+
+    // Alice initiates a ratchet session with Bob and sends the first message;
+    // Bob creates the matching receiver session and decrypts it, establishing
+    // a real, working two-party conversation before any backup happens.
+    alice
+        .ratchet_sessions_handle()
+        .write()
+        .get_or_create_session(
+            "bob",
+            &alice.identity_signing_key_for_test(),
+            &bob_x25519_pub,
+        )
+        .expect("alice creates sender session");
+    bob.create_receiver_session("alice", &hex::encode(alice_x25519_pub.to_bytes()))
+        .expect("bob creates receiver session");
+
+    let first_envelope = {
+        let sessions = alice.ratchet_sessions_handle();
+        let mut guard = sessions.write();
+        let session = guard.get_session_mut("bob").expect("alice session exists");
+        encrypt_message_ratcheted(
+            &alice.identity_signing_key_for_test(),
+            session,
+            b"hello bob, before backup",
+        )
+        .expect("alice encrypts first message")
+    };
+    {
+        let sessions = bob.ratchet_sessions_handle();
+        let mut guard = sessions.write();
+        let session = guard.get_session_mut("alice").expect("bob session exists");
+        let plaintext = decrypt_message_ratcheted(session, &first_envelope)
+            .expect("bob decrypts first message");
+        assert_eq!(plaintext, b"hello bob, before backup");
+    }
+
+    // Alice also adds Bob as a contact.
+    alice
+        .contacts_store_manager()
+        .add(Contact::new("bob".to_string(), bob_pub_hex.clone()))
+        .expect("alice adds bob as a contact");
+
+    // Export Alice's full identity backup (identity + ratchet session + contact).
+    let passphrase = "correct horse battery staple";
+    let backup = alice
+        .export_identity_backup(passphrase.to_string())
+        .expect("export_identity_backup succeeds");
+
+    // Restore onto a completely fresh IronCore, simulating a new device.
+    let alice_restored = IronCore::new();
+    alice_restored
+        .import_identity_backup(backup, passphrase.to_string())
+        .expect("import_identity_backup succeeds");
+
+    assert_eq!(
+        alice_restored.get_identity_info().public_key_hex,
+        Some(alice_signing_key),
+        "restored identity must match the original"
+    );
+    assert_eq!(
+        alice_restored.contacts_store_manager().list().unwrap().len(),
+        1,
+        "contact must survive the backup/restore"
+    );
+    assert!(
+        alice_restored.ratchet_has_session("bob".to_string()),
+        "ratchet session with bob must survive the backup/restore"
+    );
+
+    // The critical continuity check: encrypt a *new* message with the
+    // restored session and confirm Bob's original (never-restored) session
+    // can still decrypt it - proving the restored ratchet state is fully
+    // functional, not just structurally present.
+    let next_envelope = {
+        let sessions = alice_restored.ratchet_sessions_handle();
+        let mut guard = sessions.write();
+        let session = guard.get_session_mut("bob").expect("restored session exists");
+        encrypt_message_ratcheted(
+            &alice_restored.identity_signing_key_for_test(),
+            session,
+            b"hello bob, after restore",
+        )
+        .expect("restored session encrypts next message")
+    };
+    {
+        let sessions = bob.ratchet_sessions_handle();
+        let mut guard = sessions.write();
+        let session = guard.get_session_mut("alice").expect("bob session exists");
+        let plaintext = decrypt_message_ratcheted(session, &next_envelope)
+            .expect("bob decrypts the next message using the restored session's output");
+        assert_eq!(plaintext, b"hello bob, after restore");
+    }
+}
+
+/// A tampered backup blob must fail closed (CorruptionDetected) and leave the
+/// target IronCore completely untouched - no partial identity, no partial
+/// ratchet sessions, no partial contacts.
+#[test]
+fn iron_core_import_tampered_backup_leaves_no_partial_state() {
+    let alice = IronCore::new();
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+    alice
+        .contacts_store_manager()
+        .add(Contact::new(
+            "carol".to_string(),
+            hex::encode([7u8; 32]),
+        ))
+        .expect("alice adds a contact");
+
+    let passphrase = "tamper-test-passphrase";
+    let backup = alice
+        .export_identity_backup(passphrase.to_string())
+        .expect("export succeeds");
+
+    let mut data = hex::decode(&backup).expect("backup is hex");
+    let last = data.len() - 1;
+    data[last] ^= 0xFF;
+    let tampered = hex::encode(data);
+
+    let fresh = IronCore::new();
+    let result = fresh.import_identity_backup(tampered, passphrase.to_string());
+
+    assert!(
+        matches!(result, Err(scmessenger_core::IronCoreError::CryptoError)),
+        "tampered backup must fail, got {:?}",
+        result.err()
+    );
+    assert!(
+        fresh.get_identity_info().public_key_hex.is_none(),
+        "no identity should have been imported from a tampered backup"
+    );
+    assert_eq!(
+        fresh.contacts_store_manager().list().unwrap().len(),
+        0,
+        "no contacts should have been imported from a tampered backup"
+    );
+    assert_eq!(
+        fresh.ratchet_session_count(),
+        0,
+        "no ratchet sessions should have been imported from a tampered backup"
+    );
+}
+
+/// Export and import must each append exactly one audit event of the
+/// corresponding type - this was previously missing entirely on export.
+#[test]
+fn iron_core_backup_export_and_import_emit_audit_events() {
+    let alice = IronCore::new();
+    alice.grant_consent();
+    alice.initialize_identity().expect("alice identity init");
+
+    let passphrase = "audit-test-passphrase";
+    let backup = alice
+        .export_identity_backup(passphrase.to_string())
+        .expect("export succeeds");
+
+    assert_eq!(
+        alice
+            .get_audit_events_by_type(AuditEventType::BackupExported)
+            .len(),
+        1,
+        "export_identity_backup must record exactly one BackupExported audit event"
+    );
+
+    let fresh = IronCore::new();
+    fresh
+        .import_identity_backup(backup, passphrase.to_string())
+        .expect("import succeeds");
+
+    assert_eq!(
+        fresh
+            .get_audit_events_by_type(AuditEventType::BackupImported)
+            .len(),
+        1,
+        "import_identity_backup must record exactly one BackupImported audit event"
+    );
 }

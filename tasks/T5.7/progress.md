@@ -22,3 +22,13 @@
 ## Verification
 - [x] CI fails when an agent adds/removes/renames any exported fn/record/enum without updating the snapshot
 - [x] Passes on no-op rebuild
+
+## Update (2026-07-01)
+Found two real bugs during a re-audit: (1) `extract_swift_symbols` only matched
+`public func`/`public class`/etc, silently missing all 231 `open func` lines
+UniFFI emits for instance methods on exported objects (including
+`runMaintenanceCycle`) - fixed the regex to also match `open func `. (2) the
+`ffi-surface` CI job only ran `gen_kotlin`, so `swift-symbols.txt` was never
+regenerated or diffed in CI at all - added a `gen_swift` step so both
+surfaces are actually gated on every push/PR. Both snapshots regenerated and
+verified clean (`scripts/ffi_surface.sh` exits 0).

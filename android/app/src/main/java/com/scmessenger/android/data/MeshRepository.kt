@@ -3129,19 +3129,32 @@ open class MeshRepository(
         }
     }
 
-    /** P1_ANDROID_003: Public entry-point for manual identity import from backup string. */
-    fun restoreIdentityFromBackup(backup: String) {
+    /**
+     * P1_ANDROID_003: Public entry-point for manual identity import from backup string.
+     *
+     * If [passphrase] is supplied (the user typed the passphrase they used when
+     * exporting via [exportIdentityBackup]), it is used directly with no fallback —
+     * a wrong user-supplied passphrase should surface as an error, not silently
+     * retry with the device-bound key. If null, falls back to the historical
+     * device-bound-passphrase behavior (for the app's own auto-backup restore flow).
+     */
+    fun restoreIdentityFromBackup(backup: String, passphrase: String? = null) {
         val core = ironCore ?: run {
             Timber.w("restoreIdentityFromBackup: Core not initialized, skipping")
             return
         }
-        try {
-            core.importIdentityBackup(backup, getPlatformSecuredPassphrase())
-            Timber.i("Restored identity from manually pasted backup payload")
-        } catch (e: Exception) {
-            // Fallback for empty passphrase for legacy manually exported backups
-            core.importIdentityBackup(backup, "")
-            Timber.i("Restored identity from manually pasted backup payload using legacy fallback")
+        if (passphrase != null) {
+            core.importIdentityBackup(backup, passphrase)
+            Timber.i("Restored identity from manually pasted backup payload using supplied passphrase")
+        } else {
+            try {
+                core.importIdentityBackup(backup, getPlatformSecuredPassphrase())
+                Timber.i("Restored identity from manually pasted backup payload")
+            } catch (e: Exception) {
+                // Fallback for empty passphrase for legacy manually exported backups
+                core.importIdentityBackup(backup, "")
+                Timber.i("Restored identity from manually pasted backup payload using legacy fallback")
+            }
         }
         // P0_SHARED_IDENTITY: publish the restored identity to all subscribers
         val restored = core.getIdentityInfo()
@@ -3149,6 +3162,17 @@ open class MeshRepository(
             cacheIdentityFields(restored)
         }
         publishIdentityInfo(restored)
+    }
+
+    /**
+     * Export a passphrase-encrypted identity backup: the identity signing key,
+     * active ratchet sessions, and contacts, encrypted with an Argon2id-derived
+     * key. Distinct from [getIdentityExportString], which exports the public
+     * identity card (peer ID / public key / listeners) with no encryption.
+     */
+    fun exportIdentityBackup(passphrase: String): String {
+        val core = ironCore ?: throw IllegalStateException("Core not initialized")
+        return core.exportIdentityBackup(passphrase)
     }
 
     private fun persistIdentityBackup(
@@ -3299,6 +3323,13 @@ open class MeshRepository(
         kotlin.runCatching { wifiTransportManager?.stopDiscovery() }
             .onFailure { Timber.w(it, "Failed to stop WiFi transport") }
 
+        // TransportManager.startAll() is called when the service starts (see
+        // above); stopAll() must be called here too so WiFi Aware detaches
+        // (WifiAwareSession.close()) instead of leaking an attach session
+        // for the lifetime of the process after the mesh service stops.
+        kotlin.runCatching { transportManager?.stopAll() }
+            .onFailure { Timber.w(it, "Failed to stop TransportManager (BLE/WiFi Aware/WiFi Direct/mDNS)") }
+
         kotlin.runCatching { swarmBridge?.shutdown() }
             .onFailure { Timber.w(it, "Failed to shutdown swarm bridge") }
 
@@ -3325,6 +3356,7 @@ open class MeshRepository(
         bleGattServer = null
         bleGattClient = null
         wifiTransportManager = null
+        transportManager = null
 
         _serviceState.value = uniffi.api.ServiceState.STOPPED
         _serviceStats.value = null
@@ -3732,6 +3764,27 @@ open class MeshRepository(
     fun setContactNickname(peerId: String, nickname: String?) {
         contactManager?.setNickname(peerId, nickname)
         Timber.d("Contact nickname updated: $peerId -> $nickname")
+    }
+
+    /** Mark a contact as verified after an out-of-band safety-number comparison. */
+    fun markContactVerified(peerId: String) {
+        contactManager?.markVerified(peerId)
+        Timber.d("Contact marked verified: $peerId")
+    }
+
+    /** Clear a contact's verification status (e.g. after a key change). */
+    fun unverifyContact(peerId: String) {
+        contactManager?.unverify(peerId)
+        Timber.d("Contact verification cleared: $peerId")
+    }
+
+    /**
+     * Compute the Signal-style safety number for comparing identities with [theirPublicKeyHex]
+     * out-of-band. Returns null if our own identity isn't initialized yet.
+     */
+    fun computeSafetyNumber(theirPublicKeyHex: String): String? {
+        val ourKey = identityInfo.value?.publicKeyHex ?: return null
+        return uniffi.api.safetyNumber(ourKey, theirPublicKeyHex)
     }
 
     fun getContactCount(): UInt {

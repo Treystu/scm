@@ -604,6 +604,45 @@ class ContactsViewModel @Inject constructor(
     }
 
     /**
+     * Mark a contact as verified after the user has compared safety numbers
+     * out-of-band and confirmed they match.
+     */
+    fun markContactVerified(peerId: String) {
+        viewModelScope.launch {
+            try {
+                meshRepository.markContactVerified(peerId)
+                loadContacts()
+                Timber.i("Contact marked verified: $peerId")
+            } catch (e: Exception) {
+                _error.value = "Failed to mark contact verified: ${e.message}"
+                Timber.e(e, "Failed to mark contact verified")
+            }
+        }
+    }
+
+    /** Clear a contact's verification status (e.g. after a key change). */
+    fun unverifyContact(peerId: String) {
+        viewModelScope.launch {
+            try {
+                meshRepository.unverifyContact(peerId)
+                loadContacts()
+                Timber.i("Contact verification cleared: $peerId")
+            } catch (e: Exception) {
+                _error.value = "Failed to clear contact verification: ${e.message}"
+                Timber.e(e, "Failed to clear contact verification")
+            }
+        }
+    }
+
+    /**
+     * Compute the safety number for comparing our identity with [theirPublicKeyHex]
+     * out-of-band. Returns null if our own identity isn't initialized yet.
+     */
+    fun computeSafetyNumber(theirPublicKeyHex: String): String? {
+        return meshRepository.computeSafetyNumber(theirPublicKeyHex)
+    }
+
+    /**
      * Update contact device ID (for multi-device tracking).
      *
      * @param peerId The peer ID

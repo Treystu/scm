@@ -179,4 +179,22 @@ fn test_run_maintenance_cycle_budget() {
     assert!(report.contains("budget_ms"));
     assert!(report.contains("elapsed_ms"));
     assert!(report.contains("work_done"));
+
+    // The cycle's actual work (a single drift-engine tick check) should take
+    // microseconds, nowhere near the 50ms budget. Parse and assert the real
+    // elapsed time, not just that the field is present, so a future
+    // regression that makes the cycle blow its budget gets caught here
+    // instead of surfacing as a dropped BGProcessingTask/WorkManager job on
+    // real devices.
+    let parsed: serde_json::Value =
+        serde_json::from_str(&report).expect("run_maintenance_cycle report is not valid JSON");
+    let elapsed_ms = parsed["elapsed_ms"]
+        .as_u64()
+        .expect("elapsed_ms missing or not a number");
+    assert!(
+        elapsed_ms < 100,
+        "run_maintenance_cycle took {}ms, expected well under the 100ms budget-gate threshold: {}",
+        elapsed_ms,
+        report
+    );
 }

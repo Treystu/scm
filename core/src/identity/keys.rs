@@ -352,4 +352,40 @@ mod tests {
             valid_count
         );
     }
+
+    #[test]
+    fn test_safety_number_is_order_independent_and_deterministic() {
+        let a = IdentityKeys::generate().public_key_hex();
+        let b = IdentityKeys::generate().public_key_hex();
+
+        let ab = safety_number(&a, &b).unwrap();
+        let ba = safety_number(&b, &a).unwrap();
+        assert_eq!(ab, ba, "safety number must not depend on argument order");
+
+        // Deterministic: same inputs produce the same output every time.
+        assert_eq!(ab, safety_number(&a, &b).unwrap());
+
+        // 12 groups of 5 digits, space-separated.
+        let groups: Vec<&str> = ab.split(' ').collect();
+        assert_eq!(groups.len(), 12);
+        for group in groups {
+            assert_eq!(group.len(), 5);
+            assert!(group.chars().all(|c| c.is_ascii_digit()));
+        }
+    }
+
+    #[test]
+    fn test_safety_number_differs_for_different_key_pairs() {
+        let a = IdentityKeys::generate().public_key_hex();
+        let b = IdentityKeys::generate().public_key_hex();
+        let c = IdentityKeys::generate().public_key_hex();
+
+        assert_ne!(safety_number(&a, &b).unwrap(), safety_number(&a, &c).unwrap());
+    }
+
+    #[test]
+    fn test_safety_number_rejects_malformed_keys() {
+        assert!(safety_number("not-hex", "also-not-hex").is_err());
+        assert!(safety_number("abcd", "abcd").is_err()); // too short
+    }
 }

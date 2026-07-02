@@ -53,6 +53,22 @@ pub struct GroupInfo {
     pub interface_name: String,
 }
 
+/// Android's `WifiP2pConfig.groupOwnerIntent` ranges 0-15; a device more likely
+/// to stay powered and near mains (charging or with plenty of battery) should
+/// bid higher so it wins group-owner negotiation and becomes the relay point.
+pub const WIFI_DIRECT_GO_INTENT_PREFERRED: i32 = 7;
+pub const WIFI_DIRECT_GO_INTENT_CLIENT: i32 = 0;
+
+/// Mirrors the Kotlin-side decision in `WifiDirectTransport.kt`: prefer to be
+/// group owner when charging or above 50% battery, otherwise prefer client.
+pub fn compute_group_owner_intent(is_charging: bool, battery_pct: u8) -> i32 {
+    if is_charging || battery_pct > 50 {
+        WIFI_DIRECT_GO_INTENT_PREFERRED
+    } else {
+        WIFI_DIRECT_GO_INTENT_CLIENT
+    }
+}
+
 #[async_trait]
 pub trait WifiDirectPlatformBridge: Send + Sync {
     async fn is_available(&self) -> Result<bool, WifiDirectError>;
@@ -413,5 +429,36 @@ mod tests {
         assert_eq!(transport.get_state(), WifiDirectState::GroupOwner);
         assert!(transport.remove_group().await.is_ok());
         assert_eq!(transport.get_state(), WifiDirectState::Idle);
+    }
+
+    #[test]
+    fn test_group_owner_intent_charging_prefers_owner() {
+        // Charging, regardless of battery level -> bid to be group owner.
+        assert_eq!(
+            compute_group_owner_intent(true, 10),
+            WIFI_DIRECT_GO_INTENT_PREFERRED
+        );
+    }
+
+    #[test]
+    fn test_group_owner_intent_high_battery_prefers_owner() {
+        // Not charging but well-charged -> still bid to be group owner.
+        assert_eq!(
+            compute_group_owner_intent(false, 51),
+            WIFI_DIRECT_GO_INTENT_PREFERRED
+        );
+    }
+
+    #[test]
+    fn test_group_owner_intent_low_battery_prefers_client() {
+        // Not charging and battery at/below threshold -> prefer client role.
+        assert_eq!(
+            compute_group_owner_intent(false, 50),
+            WIFI_DIRECT_GO_INTENT_CLIENT
+        );
+        assert_eq!(
+            compute_group_owner_intent(false, 5),
+            WIFI_DIRECT_GO_INTENT_CLIENT
+        );
     }
 }

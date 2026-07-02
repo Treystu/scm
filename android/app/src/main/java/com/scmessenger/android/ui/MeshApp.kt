@@ -209,7 +209,23 @@ fun MeshNavHost(
                         onNavigateBack = { navController.popBackStack() },
                         onNavigateToChat = { peerId ->
                             navController.navigate("chat/$peerId")
+                        },
+                        onNavigateToVerify = { peerId ->
+                            navController.navigate("verify_safety_number/$peerId")
                         }
+                    )
+                }
+            }
+
+            composable(
+                route = "verify_safety_number/{contactId}",
+                arguments = listOf(androidx.navigation.navArgument("contactId") { type = androidx.navigation.NavType.StringType })
+            ) { backStackEntry ->
+                val contactId = backStackEntry.arguments?.getString("contactId") ?: return@composable
+                Box(modifier = Modifier.padding(bottomPadding)) {
+                    com.scmessenger.android.ui.contacts.VerifySafetyNumberScreen(
+                        contactId = contactId,
+                        onNavigateBack = { navController.popBackStack() }
                     )
                 }
             }

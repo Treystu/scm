@@ -573,7 +573,11 @@ fileprivate struct FfiConverterString: FfiConverter {
             return String()
         }
         let bytes = UnsafeBufferPointer<UInt8>(start: value.data!, count: Int(value.len))
-        return String(bytes: bytes, encoding: String.Encoding.utf8)!
+        // Use Swift's native UTF-8 decoder; `String(bytes:encoding:.utf8)` goes
+        // through Foundation's NSString and silently strips a leading U+FEFF BOM.
+        // Invalid UTF-8 substitutes U+FFFD instead of trapping (unreachable
+        // given Rust's `String` invariant).
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     public static func lower(_ value: String) -> RustBuffer {
@@ -589,7 +593,8 @@ fileprivate struct FfiConverterString: FfiConverter {
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> String {
         let len: Int32 = try readInt(&buf)
-        return String(bytes: try readBytes(&buf, count: Int(len)), encoding: String.Encoding.utf8)!
+        // See `lift` above for why we avoid Foundation's NSString-backed decoder here.
+        return String(decoding: try readBytes(&buf, count: Int(len)), as: UTF8.self)
     }
 
     public static func write(_ value: String, into buf: inout [UInt8]) {
@@ -1605,6 +1610,14 @@ public protocol IronCoreProtocol: AnyObject, Sendable {
      */
     func blockedOnlyPeerIds() throws  -> [String]
     
+    /**
+     * Build the JSON payload backed up by `export_identity_backup*`: the
+     * identity keypair plus everything needed to keep conversing without
+     * interruption after a restore — active ratchet sessions (so the next
+     * message from an existing contact still decrypts) and contacts.
+     */
+    func buildIdentityBackupPayload() throws  -> String
+    
     func classifyNotification(message: NotificationMessageContext, uiState: NotificationUiState, settings: MeshSettings)  -> NotificationDecision
     
     /**
@@ -1791,6 +1804,12 @@ public protocol IronCoreProtocol: AnyObject, Sendable {
      */
     func identityId()  -> String?
     
+    /**
+     * Import an identity backup. Validates the entire payload (identity
+     * key bytes, ratchet session JSON, contact records) before writing
+     * anything, so a malformed or partially-tampered payload can't leave
+     * identity/ratchet-sessions/contacts in a mix of old and new state.
+     */
     func importIdentityBackup(backup: String, passphrase: String) throws 
     
     func inboxCount()  -> UInt32
@@ -1870,6 +1889,14 @@ public protocol IronCoreProtocol: AnyObject, Sendable {
     func onAppResume() 
     
     func outboxCount()  -> UInt32
+    
+    /**
+     * Non-destructively list all received messages still in the inbox.
+     * Unlike `drain_received_messages`, repeated calls return the same
+     * messages until something else clears them - needed for read-only
+     * polling like listing pending message requests.
+     */
+    func peekReceivedMessages()  -> [ReceivedMessage]
     
     /**
      * Peel one layer of an onion-routed envelope (relay-side operation).
@@ -2268,6 +2295,20 @@ open func blockedCount()throws  -> UInt32  {
 open func blockedOnlyPeerIds()throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
     uniffi_scmessenger_core_fn_method_ironcore_blocked_only_peer_ids(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Build the JSON payload backed up by `export_identity_backup*`: the
+     * identity keypair plus everything needed to keep conversing without
+     * interruption after a restore — active ratchet sessions (so the next
+     * message from an existing contact still decrypts) and contacts.
+     */
+open func buildIdentityBackupPayload()throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
+    uniffi_scmessenger_core_fn_method_ironcore_build_identity_backup_payload(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -2708,6 +2749,12 @@ open func identityId() -> String?  {
 })
 }
     
+    /**
+     * Import an identity backup. Validates the entire payload (identity
+     * key bytes, ratchet session JSON, contact records) before writing
+     * anything, so a malformed or partially-tampered payload can't leave
+     * identity/ratchet-sessions/contacts in a mix of old and new state.
+     */
 open func importIdentityBackup(backup: String, passphrase: String)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
     uniffi_scmessenger_core_fn_method_ironcore_import_identity_backup(
             self.uniffiCloneHandle(),
@@ -2881,6 +2928,20 @@ open func onAppResume()  {try! rustCall() {
 open func outboxCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_scmessenger_core_fn_method_ironcore_outbox_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Non-destructively list all received messages still in the inbox.
+     * Unlike `drain_received_messages`, repeated calls return the same
+     * messages until something else clears them - needed for read-only
+     * polling like listing pending message requests.
+     */
+open func peekReceivedMessages() -> [ReceivedMessage]  {
+    return try!  FfiConverterSequenceTypeReceivedMessage.lift(try! rustCall() {
+    uniffi_scmessenger_core_fn_method_ironcore_peek_received_messages(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -3912,6 +3973,11 @@ public protocol MeshServiceProtocol: AnyObject, Sendable {
     func routingTick()  -> String
     
     /**
+     * Run a bounded drift maintenance cycle within the given time budget.
+     */
+    func runMaintenanceCycle(budgetMs: UInt32)  -> String
+    
+    /**
      * Register an external delegate for protocol events (messages, discovery).
      */
     func setDelegate(delegate: CoreDelegate?) 
@@ -4436,6 +4502,18 @@ open func routingTick() -> String  {
 }
     
     /**
+     * Run a bounded drift maintenance cycle within the given time budget.
+     */
+open func runMaintenanceCycle(budgetMs: UInt32) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_scmessenger_core_fn_method_meshservice_run_maintenance_cycle(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(budgetMs),$0
+    )
+})
+}
+    
+    /**
      * Register an external delegate for protocol events (messages, discovery).
      */
 open func setDelegate(delegate: CoreDelegate?)  {try! rustCall() {
@@ -4719,8 +4797,22 @@ public protocol SwarmBridgeProtocol: AnyObject, Sendable {
     
     /**
      * Dial a peer at a multiaddress.
+     *
+     * For FFI/sync callers only. Calling this from within an already-running
+     * tokio task (e.g. a `rt.spawn`'d future) panics ("Cannot start a
+     * runtime from within a runtime") because it blocks on the same
+     * runtime that's driving the caller — use `dial_async` there instead.
      */
     func dial(multiaddr: String) throws 
+    
+    /**
+     * Dial a peer at a multiaddress from within an already-running async
+     * context (e.g. a task spawned to react to a proximity-transport
+     * discovery callback). Awaits the dial directly instead of blocking the
+     * current worker thread on it, so it's safe to call from `rt.spawn`'d
+     * futures where `dial` is not.
+     */
+    func dialAsync(multiaddr: String) async throws 
     
     func getExternalAddresses()  -> [String]
     
@@ -4831,6 +4923,11 @@ public convenience init() {
     
     /**
      * Dial a peer at a multiaddress.
+     *
+     * For FFI/sync callers only. Calling this from within an already-running
+     * tokio task (e.g. a `rt.spawn`'d future) panics ("Cannot start a
+     * runtime from within a runtime") because it blocks on the same
+     * runtime that's driving the caller — use `dial_async` there instead.
      */
 open func dial(multiaddr: String)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
     uniffi_scmessenger_core_fn_method_swarmbridge_dial(
@@ -4838,6 +4935,30 @@ open func dial(multiaddr: String)throws   {try rustCallWithError(FfiConverterTyp
         FfiConverterString.lower(multiaddr),$0
     )
 }
+}
+    
+    /**
+     * Dial a peer at a multiaddress from within an already-running async
+     * context (e.g. a task spawned to react to a proximity-transport
+     * discovery callback). Awaits the dial directly instead of blocking the
+     * current worker thread on it, so it's safe to call from `rt.spawn`'d
+     * futures where `dial` is not.
+     */
+open func dialAsync(multiaddr: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_scmessenger_core_fn_method_swarmbridge_dial_async(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(multiaddr)
+                )
+            },
+            pollFunc: ffi_scmessenger_core_rust_future_poll_void,
+            completeFunc: ffi_scmessenger_core_rust_future_complete_void,
+            freeFunc: ffi_scmessenger_core_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeIronCoreError_lift
+        )
 }
     
 open func getExternalAddresses() -> [String]  {
@@ -6485,6 +6606,15 @@ public struct ReceivedMessage: Equatable, Hashable {
      * When this was received (unix timestamp)
      */
     public var receivedAt: UInt64
+    /**
+     * Sender's Ed25519 public key (hex-encoded), taken from the envelope
+     * that carried this message. Populated at receive time since it's
+     * cryptographically verified there (the envelope's signature/AEAD tag
+     * already authenticate this key); used to add a message-request sender
+     * as a contact without depending on an unauthenticated discovery
+     * broadcast. `None` for messages received before this field existed.
+     */
+    public var senderPublicKeyHex: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -6500,11 +6630,20 @@ public struct ReceivedMessage: Equatable, Hashable {
          */payload: Data, 
         /**
          * When this was received (unix timestamp)
-         */receivedAt: UInt64) {
+         */receivedAt: UInt64, 
+        /**
+         * Sender's Ed25519 public key (hex-encoded), taken from the envelope
+         * that carried this message. Populated at receive time since it's
+         * cryptographically verified there (the envelope's signature/AEAD tag
+         * already authenticate this key); used to add a message-request sender
+         * as a contact without depending on an unauthenticated discovery
+         * broadcast. `None` for messages received before this field existed.
+         */senderPublicKeyHex: String?) {
         self.messageId = messageId
         self.senderId = senderId
         self.payload = payload
         self.receivedAt = receivedAt
+        self.senderPublicKeyHex = senderPublicKeyHex
     }
 
     
@@ -6526,7 +6665,8 @@ public struct FfiConverterTypeReceivedMessage: FfiConverterRustBuffer {
                 messageId: FfiConverterString.read(from: &buf), 
                 senderId: FfiConverterString.read(from: &buf), 
                 payload: FfiConverterData.read(from: &buf), 
-                receivedAt: FfiConverterUInt64.read(from: &buf)
+                receivedAt: FfiConverterUInt64.read(from: &buf), 
+                senderPublicKeyHex: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -6535,6 +6675,7 @@ public struct FfiConverterTypeReceivedMessage: FfiConverterRustBuffer {
         FfiConverterString.write(value.senderId, into: &buf)
         FfiConverterData.write(value.payload, into: &buf)
         FfiConverterUInt64.write(value.receivedAt, into: &buf)
+        FfiConverterOptionString.write(value.senderPublicKeyHex, into: &buf)
     }
 }
 
@@ -8221,7 +8362,11 @@ fileprivate struct UniffiCallbackInterfaceCoreDelegate {
 
     // Rust stores this pointer for future callback invocations, so it must live
     // for the process lifetime (not just for the init function call).
-    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceCoreDelegate> = {
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceCoreDelegate> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceCoreDelegate>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
         return UnsafePointer(ptr)
@@ -8802,7 +8947,11 @@ fileprivate struct UniffiCallbackInterfacePlatformBridge {
 
     // Rust stores this pointer for future callback invocations, so it must live
     // for the process lifetime (not just for the init function call).
-    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfacePlatformBridge> = {
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfacePlatformBridge> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfacePlatformBridge>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
         return UnsafePointer(ptr)
@@ -9436,6 +9585,31 @@ fileprivate struct FfiConverterSequenceTypeReceivedMessage: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeProximityTransport: FfiConverterRustBuffer {
+    typealias SwiftType = [ProximityTransport]
+
+    public static func write(_ value: [ProximityTransport], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeProximityTransport.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ProximityTransport] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ProximityTransport]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeProximityTransport.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [[String]]
 
@@ -9483,6 +9657,54 @@ fileprivate struct FfiConverterDictionaryStringString: FfiConverterRustBuffer {
         return dict
     }
 }
+private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
+private let UNIFFI_RUST_FUTURE_POLL_WAKE: Int8 = 1
+
+fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
+
+fileprivate func uniffiRustCallAsync<F, T>(
+    rustFutureFunc: () -> UInt64,
+    pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
+    completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
+    freeFunc: (UInt64) -> (),
+    liftFunc: (F) throws -> T,
+    errorHandler: ((RustBuffer) throws -> Swift.Error)?
+) async throws -> T {
+    // Make sure to call the ensure init function since future creation doesn't have a
+    // RustCallStatus param, so doesn't use makeRustCall()
+    uniffiEnsureScmessengerCoreInitialized()
+    let rustFuture = rustFutureFunc()
+    defer {
+        freeFunc(rustFuture)
+    }
+    var pollResult: Int8;
+    repeat {
+        pollResult = await withUnsafeContinuation {
+            pollFunc(
+                rustFuture,
+                { handle, pollResult in
+                    uniffiFutureContinuationCallback(handle: handle, pollResult: pollResult)
+                },
+                uniffiContinuationHandleMap.insert(obj: $0)
+            )
+        }
+    } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+
+    return try liftFunc(makeRustCall(
+        { completeFunc(rustFuture, $0) },
+        errorHandler: errorHandler
+    ))
+}
+
+// Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
+// lift the return value or error and resume the suspended function.
+fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: Int8) {
+    if let continuation = try? uniffiContinuationHandleMap.remove(handle: handle) {
+        continuation.resume(returning: pollResult)
+    } else {
+        print("uniffiFutureContinuationCallback invalid handle")
+    }
+}
 public func blockedIdentityNew(peerId: String) -> BlockedIdentity  {
     return try!  FfiConverterTypeBlockedIdentity_lift(try! rustCall() {
     uniffi_scmessenger_core_fn_func_blocked_identity_new(
@@ -9514,6 +9736,39 @@ public func blockedIdentityWithReason(blocked: BlockedIdentity, reason: String) 
     )
 })
 }
+/**
+ * Get the recommended proximity transport for a peer based on current state.
+ * Consults the EscalationEngine when available, falls back to BLE.
+ */
+public func recommendedTransport(peerId: String) -> ProximityTransport  {
+    return try!  FfiConverterTypeProximityTransport_lift(try! rustCall() {
+    uniffi_scmessenger_core_fn_func_recommended_transport(
+        FfiConverterString.lower(peerId),$0
+    )
+})
+}
+/**
+ * Generate a Signal-style safety number from two public keys (Ed25519 hex).
+ * Returns a 60-digit numeric string. Order-independent so both sides match.
+ */
+public func safetyNumber(ourPubkeyHex: String, theirPubkeyHex: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_scmessenger_core_fn_func_safety_number(
+        FfiConverterString.lower(ourPubkeyHex),
+        FfiConverterString.lower(theirPubkeyHex),$0
+    )
+})
+}
+/**
+ * Update the available transports list for a peer in the authoritative EscalationEngine.
+ */
+public func updatePeerTransports(peerId: String, transports: [ProximityTransport])  {try! rustCall() {
+    uniffi_scmessenger_core_fn_func_update_peer_transports(
+        FfiConverterString.lower(peerId),
+        FfiConverterSequenceTypeProximityTransport.lower(transports),$0
+    )
+}
+}
 
 private enum InitializationResult {
     case ok
@@ -9540,6 +9795,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_func_blocked_identity_with_reason() != 63741) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_func_recommended_transport() != 51787) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_func_safety_number() != 53955) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_func_update_peer_transports() != 32345) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_contactmanager_add() != 39878) {
@@ -9606,6 +9870,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_ironcore_blocked_only_peer_ids() != 47881) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_ironcore_build_identity_backup_payload() != 5370) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_ironcore_classify_notification() != 20337) {
@@ -9725,7 +9992,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scmessenger_core_checksum_method_ironcore_identity_id() != 36996) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_scmessenger_core_checksum_method_ironcore_import_identity_backup() != 36375) {
+    if (uniffi_scmessenger_core_checksum_method_ironcore_import_identity_backup() != 28771) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_ironcore_inbox_count() != 61669) {
@@ -9771,6 +10038,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_ironcore_outbox_count() != 44306) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_ironcore_peek_received_messages() != 9451) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_ironcore_peel_onion_layer() != 32312) {
@@ -10160,6 +10430,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scmessenger_core_checksum_method_meshservice_routing_tick() != 15719) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_scmessenger_core_checksum_method_meshservice_run_maintenance_cycle() != 13630) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_scmessenger_core_checksum_method_meshservice_set_delegate() != 25873) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10196,7 +10469,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scmessenger_core_checksum_method_meshsettingsmanager_validate() != 7706) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_scmessenger_core_checksum_method_swarmbridge_dial() != 16735) {
+    if (uniffi_scmessenger_core_checksum_method_swarmbridge_dial() != 31261) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scmessenger_core_checksum_method_swarmbridge_dial_async() != 46991) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scmessenger_core_checksum_method_swarmbridge_get_external_addresses() != 57424) {

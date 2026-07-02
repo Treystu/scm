@@ -28,6 +28,14 @@ pub struct ReceivedMessage {
     pub payload: Vec<u8>,
     /// When this was received (unix timestamp)
     pub received_at: u64,
+    /// Sender's Ed25519 public key (hex-encoded), taken from the envelope
+    /// that carried this message. Populated at receive time since it's
+    /// cryptographically verified there (the envelope's signature/AEAD tag
+    /// already authenticate this key); used to add a message-request sender
+    /// as a contact without depending on an unauthenticated discovery
+    /// broadcast. `None` for messages received before this field existed.
+    #[serde(default)]
+    pub sender_public_key_hex: Option<String>,
 }
 
 /// Storage backend for inbox
@@ -341,6 +349,7 @@ mod tests {
                 .duration_since(web_time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
+            sender_public_key_hex: None,
         }
     }
 
