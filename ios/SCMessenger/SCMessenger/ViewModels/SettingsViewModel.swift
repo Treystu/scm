@@ -83,14 +83,22 @@ final class SettingsViewModel {
         backupExportResult = nil
     }
 
+    var backupImportResult: Result<Void, Error>?
+
     /// Import an identity backup using a user-supplied passphrase.
     func importIdentityBackup(backup: String, passphrase: String) {
         do {
             try repository?.importIdentityBackup(backup: backup, passphrase: passphrase)
             successMessage = "Identity restored successfully"
+            backupImportResult = .success(())
         } catch {
             self.error = "Failed to restore identity: \(error.localizedDescription)"
+            backupImportResult = .failure(error)
         }
+    }
+
+    func clearBackupImportResult() {
+        backupImportResult = nil
     }
 
     // MARK: - Settings Lifecycle

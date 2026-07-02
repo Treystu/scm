@@ -100,26 +100,48 @@ struct ImportIdentityBackupSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    TextField("Paste backup string", text: $backupText, axis: .vertical)
-                        .lineLimit(3...6)
-                    SecureField("Passphrase", text: $passphrase)
-                } footer: {
-                    Text("Enter the exact passphrase used when this backup was exported.")
-                }
-                Section {
-                    Button("Import") {
-                        viewModel.importIdentityBackup(backup: backupText, passphrase: passphrase)
-                        dismiss()
+                if let result = viewModel.backupImportResult {
+                    Section {
+                        switch result {
+                        case .success:
+                            Text("Identity restored successfully. Your conversations and contacts should now be back.")
+                                .font(Theme.bodySmall)
+                                .foregroundStyle(.green)
+                        case .failure(let error):
+                            Text("Failed to restore identity: \(error.localizedDescription)")
+                                .foregroundStyle(.red)
+                        }
                     }
-                    .disabled(backupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || passphrase.isEmpty)
+                } else {
+                    Section {
+                        TextField("Paste backup string", text: $backupText, axis: .vertical)
+                            .lineLimit(3...6)
+                        SecureField("Passphrase", text: $passphrase)
+                    } footer: {
+                        Text("Enter the exact passphrase used when this backup was exported.")
+                    }
+                    Section {
+                        Button("Import") {
+                            viewModel.importIdentityBackup(backup: backupText, passphrase: passphrase)
+                        }
+                        .disabled(backupText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || passphrase.isEmpty)
+                    }
                 }
             }
             .navigationTitle("Import Identity Backup")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                if viewModel.backupImportResult != nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") {
+                            viewModel.clearBackupImportResult()
+                            dismiss()
+                        }
+                    }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                    }
                 }
             }
         }
