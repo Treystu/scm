@@ -1386,7 +1386,7 @@ impl IronCore {
         {
             let contact_manager = self.contact_manager.read();
             for contact in contacts {
-                let _ = contact_manager.add(contact);
+                contact_manager.add(contact)?;
             }
         }
 
