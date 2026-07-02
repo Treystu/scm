@@ -16,7 +16,12 @@ private const val MIN_BACKUP_PASSPHRASE_LENGTH = 8
  */
 fun validateBackupPassphrase(passphrase: String, confirmation: String): BackupPassphraseValidation {
     return when {
-        passphrase.length < MIN_BACKUP_PASSPHRASE_LENGTH -> BackupPassphraseValidation.TooShort
+        // codePointCount, not length: String.length counts UTF-16 code
+        // units, so a passphrase of surrogate-pair characters (e.g. most
+        // emoji) reports roughly double its actual character count and
+        // could pass this check with far fewer real characters than intended.
+        passphrase.codePointCount(0, passphrase.length) < MIN_BACKUP_PASSPHRASE_LENGTH ->
+            BackupPassphraseValidation.TooShort
         passphrase != confirmation -> BackupPassphraseValidation.Mismatch
         else -> BackupPassphraseValidation.Valid
     }

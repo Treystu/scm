@@ -38,4 +38,18 @@ class BackupPassphraseValidatorTest {
             validateBackupPassphrase("ab", "cd")
         )
     }
+
+    @Test
+    fun `four-emoji passphrase is too short despite eight UTF-16 code units`() {
+        // Each of these emoji is a supplementary-plane character (a surrogate
+        // pair = 2 UTF-16 code units), so four of them make String.length
+        // report 8 even though there are only 4 actual characters - the min
+        // length must be enforced in code points, not UTF-16 units.
+        val fourEmoji = "😀😀😀😀"
+        assertEquals(8, fourEmoji.length)
+        assertEquals(
+            BackupPassphraseValidation.TooShort,
+            validateBackupPassphrase(fourEmoji, fourEmoji)
+        )
+    }
 }
