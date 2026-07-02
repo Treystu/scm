@@ -14,6 +14,7 @@ struct VerifySafetyNumberSheet: View {
     let peerId: String
     let viewModel: ContactsViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var actionError: String?
 
     private var contact: Contact? {
         viewModel.contacts.first { $0.peerId == peerId }
@@ -65,19 +66,38 @@ struct VerifySafetyNumberSheet: View {
 
                     verificationStatus(for: contact)
 
+                    if let actionError {
+                        Text(actionError)
+                            .font(Theme.bodySmall)
+                            .foregroundStyle(.red)
+                    }
+
                     if contact.verifiedAt != nil {
                         Button("Clear Verification", role: .destructive) {
-                            try? viewModel.unverifyContact(peerId: peerId)
+                            do {
+                                try viewModel.unverifyContact(peerId: peerId)
+                                actionError = nil
+                            } catch {
+                                actionError = "Failed to clear verification: \(error.localizedDescription)"
+                            }
                         }
                         .buttonStyle(.bordered)
                     } else {
                         Button {
-                            try? viewModel.markContactVerified(peerId: peerId)
+                            do {
+                                try viewModel.markContactVerified(peerId: peerId)
+                                actionError = nil
+                            } catch {
+                                actionError = "Failed to mark as verified: \(error.localizedDescription)"
+                            }
                         } label: {
                             Label("Mark as Verified", systemImage: "checkmark.shield.fill")
                         }
                         .buttonStyle(.borderedProminent)
                     }
+                } else if contact == nil {
+                    Text("Contact not found")
+                        .foregroundStyle(.secondary)
                 } else {
                     Text("Your identity isn't initialized yet")
                         .foregroundStyle(.secondary)
