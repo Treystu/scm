@@ -86,6 +86,15 @@ impl ContactManager {
     /// Idempotent - a no-op once every contact has been rewritten under its
     /// prefixed key.
     fn migrate_unprefixed_contacts(&self) {
+        if self
+            .backend
+            .get(b"metadata_contacts_migrated")
+            .map(|opt| opt.is_some())
+            .unwrap_or(false)
+        {
+            return;
+        }
+
         let Ok(entries) = self.backend.scan_prefix(b"") else {
             return;
         };
@@ -103,15 +112,26 @@ impl ContactManager {
             if contact.peer_id.as_bytes() != key.as_slice() {
                 continue;
             }
-            if self
+            
+            let prefixed = contact_key(&contact.peer_id);
+            let already_exists = self
                 .backend
-                .put(&contact_key(&contact.peer_id), &value)
-                .is_ok()
-                && self.backend.remove(&key).is_ok()
-            {
+                .get(&prefixed)
+                .map(|opt| opt.is_some())
+                .unwrap_or(false);
+
+            if already_exists {
+                // Prefixed key already exists, don't overwrite.
+                // Just remove the legacy bare key to clean up the backend.
+                let _ = self.backend.remove(&key);
+            } else if self.backend.put(&prefixed, &value).is_ok() {
+                let _ = self.backend.remove(&key);
                 migrated += 1;
             }
         }
+
+        let _ = self.backend.put(b"metadata_contacts_migrated", b"true");
+
         if migrated > 0 {
             tracing::info!(
                 event = "contacts_key_prefix_migration",

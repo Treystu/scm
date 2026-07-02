@@ -1401,9 +1401,8 @@ pub async fn handle_jsonrpc_request(
                 let public_key_hex = core
                     .peek_received_messages()
                     .into_iter()
-                    .filter(|m| m.sender_id == request_id)
-                    .filter_map(|m| m.sender_public_key_hex)
-                    .next_back();
+                    .find(|m| m.sender_id == request_id)
+                    .and_then(|m| m.sender_public_key_hex);
 
                 match public_key_hex {
                     Some(public_key) => {

@@ -165,11 +165,17 @@ impl RatchetSessionManager {
         let map: HashMap<String, SerializableRatchetSession> = serde_json::from_str(json)
             .map_err(|e| anyhow::anyhow!("Failed to deserialize ratchet sessions: {}", e))?;
 
+        let mut decoded = Vec::new();
+
         for (peer_id, serializable) in map {
             if self.sessions.contains_key(&peer_id) {
                 continue; // Don't overwrite existing in-memory sessions
             }
             let session = serializable.into_session()?;
+            decoded.push((peer_id, session));
+        }
+
+        for (peer_id, session) in decoded {
             self.sessions.insert(peer_id, session);
         }
         Ok(())
