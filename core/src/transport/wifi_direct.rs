@@ -313,24 +313,26 @@ impl WifiDirectTransport {
 
     pub fn wire_callbacks(&self) {
         let discovered_peers = self.discovered_peers.clone();
-        self.bridge.set_on_peers_changed(Box::new(move |peers: Vec<WifiDirectPeer>| {
-            let mut map = discovered_peers.write();
-            map.clear();
-            for peer in peers {
-                map.insert(peer.device_address.clone(), peer);
-            }
-        }));
+        self.bridge
+            .set_on_peers_changed(Box::new(move |peers: Vec<WifiDirectPeer>| {
+                let mut map = discovered_peers.write();
+                map.clear();
+                for peer in peers {
+                    map.insert(peer.device_address.clone(), peer);
+                }
+            }));
 
         let group_info = self.group_info.clone();
         let state = self.state.clone();
-        self.bridge.set_on_connection_info(Box::new(move |info: GroupInfo| {
-            if info.group_owner {
-                *state.write() = WifiDirectState::GroupOwner;
-            } else {
-                *state.write() = WifiDirectState::GroupClient;
-            }
-            *group_info.write() = Some(info);
-        }));
+        self.bridge
+            .set_on_connection_info(Box::new(move |info: GroupInfo| {
+                if info.group_owner {
+                    *state.write() = WifiDirectState::GroupOwner;
+                } else {
+                    *state.write() = WifiDirectState::GroupClient;
+                }
+                *group_info.write() = Some(info);
+            }));
     }
 
     pub async fn shutdown(&self) -> Result<(), WifiDirectError> {

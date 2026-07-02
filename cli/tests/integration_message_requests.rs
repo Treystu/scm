@@ -19,7 +19,11 @@ fn make_node() -> IronCore {
     let dir = tempfile::tempdir().unwrap();
     // Leak the tempdir so it outlives the IronCore instance for the life of
     // the test process; these are small, short-lived test-only directories.
-    let path = Box::leak(Box::new(dir)).path().to_str().unwrap().to_string();
+    let path = Box::leak(Box::new(dir))
+        .path()
+        .to_str()
+        .unwrap()
+        .to_string();
     let node = IronCore::with_storage(path);
     node.grant_consent();
     node.initialize_identity()

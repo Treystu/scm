@@ -352,7 +352,11 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
         "restored identity must match the original"
     );
     assert_eq!(
-        alice_restored.contacts_store_manager().list().unwrap().len(),
+        alice_restored
+            .contacts_store_manager()
+            .list()
+            .unwrap()
+            .len(),
         1,
         "contact must survive the backup/restore"
     );
@@ -368,7 +372,9 @@ fn iron_core_backup_restore_preserves_ratchet_continuity_and_contacts() {
     let next_envelope = {
         let sessions = alice_restored.ratchet_sessions_handle();
         let mut guard = sessions.write();
-        let session = guard.get_session_mut("bob").expect("restored session exists");
+        let session = guard
+            .get_session_mut("bob")
+            .expect("restored session exists");
         encrypt_message_ratcheted(
             &alice_restored.identity_signing_key_for_test(),
             session,
@@ -396,10 +402,7 @@ fn iron_core_import_tampered_backup_leaves_no_partial_state() {
     alice.initialize_identity().expect("alice identity init");
     alice
         .contacts_store_manager()
-        .add(Contact::new(
-            "carol".to_string(),
-            hex::encode([7u8; 32]),
-        ))
+        .add(Contact::new("carol".to_string(), hex::encode([7u8; 32])))
         .expect("alice adds a contact");
 
     let passphrase = "tamper-test-passphrase";

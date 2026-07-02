@@ -42,7 +42,12 @@ fn test_backup_continuity_and_corruption() {
 
     // 4. Bob prepares a message for Alice2 (using her restored public key)
     let prepared = bob
-        .prepare_message(pubkey(&alice2), plaintext.to_string(), MessageType::Text, None)
+        .prepare_message(
+            pubkey(&alice2),
+            plaintext.to_string(),
+            MessageType::Text,
+            None,
+        )
         .expect("prepare_message should succeed");
 
     // Alice2 decrypts the message
@@ -73,7 +78,8 @@ fn test_backup_continuity_and_corruption() {
     // Test wrong passphrase
     let alice4 = IronCore::new();
     alice4.grant_consent();
-    let wrong_passphrase_result = alice4.import_identity_backup(backup_hex, "wrong-passphrase".to_string());
+    let wrong_passphrase_result =
+        alice4.import_identity_backup(backup_hex, "wrong-passphrase".to_string());
     assert!(
         wrong_passphrase_result.is_err(),
         "Importing with a wrong passphrase must fail"
@@ -105,7 +111,12 @@ fn test_backup_with_salt_continuity() {
     // Decrypt verification
     let plaintext = "Verifying message decrypt with custom salt backup";
     let prepared = bob
-        .prepare_message(pubkey(&alice2), plaintext.to_string(), MessageType::Text, None)
+        .prepare_message(
+            pubkey(&alice2),
+            plaintext.to_string(),
+            MessageType::Text,
+            None,
+        )
         .expect("prepare_message should succeed");
 
     let received = alice2
