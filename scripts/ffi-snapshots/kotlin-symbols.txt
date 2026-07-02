@@ -74,10 +74,12 @@ fun `annotateIdentity`(`multiaddr`: kotlin.String, `peerId`: kotlin.String, `pub
 fun `blockAndDeletePeer`(`peerId`: kotlin.String, `deviceId`: kotlin.String?, `reason`: kotlin.String?)
 fun `blockPeer`(`peerId`: kotlin.String, `deviceId`: kotlin.String?, `reason`: kotlin.String?)
 fun `blockedCount`(): kotlin.UInt
+fun `blockedIdentityNew`(`peerId`: kotlin.String): BlockedIdentity {
 fun `blockedIdentityWithDeviceId`(`blocked`: BlockedIdentity, `deviceId`: kotlin.String): BlockedIdentity {
 fun `blockedIdentityWithNotes`(`blocked`: BlockedIdentity, `notes`: kotlin.String): BlockedIdentity {
 fun `blockedIdentityWithReason`(`blocked`: BlockedIdentity, `reason`: kotlin.String): BlockedIdentity {
 fun `blockedOnlyPeerIds`(): List<kotlin.String>
+fun `buildIdentityBackupPayload`(): kotlin.String
 fun `classifyNotification`(`message`: NotificationMessageContext, `uiState`: NotificationUiState, `settings`: MeshSettings): NotificationDecision
 fun `clearConversation`(`peerId`: kotlin.String)
 fun `clearHistory`()
@@ -211,6 +213,7 @@ fun `overrideBleScanInterval`(`intervalMs`: kotlin.UInt)
 fun `overrideRelayMaxPerHour`(`max`: kotlin.UInt)
 fun `overrideRelayPriorityThreshold`(`threshold`: kotlin.UByte?)
 fun `pause`()
+fun `peekReceivedMessages`(): List<ReceivedMessage>
 fun `peelOnionLayer`(`onionData`: kotlin.ByteArray, `relaySecretKey`: kotlin.ByteArray): PeelResult
 fun `peelOnionLayer`(`onionData`: kotlin.ByteArray, `relaySecretKey`: kotlin.ByteArray): PeelResult
 fun `peerRateLimitMultiplier`(`peerId`: kotlin.String): kotlin.Double

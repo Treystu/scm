@@ -15,6 +15,7 @@ open func blockAndDeletePeer(peerId: String, deviceId: String?, reason: String?)
 open func blockPeer(peerId: String, deviceId: String?, reason: String?)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
 open func blockedCount()throws  -> UInt32  {
 open func blockedOnlyPeerIds()throws  -> [String]  {
+open func buildIdentityBackupPayload()throws  -> String  {
 open func classifyNotification(message: NotificationMessageContext, uiState: NotificationUiState, settings: MeshSettings) -> NotificationDecision  {
 open func clear()throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
 open func clearConversation(peerId: String)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
@@ -38,6 +39,7 @@ open func defaultSettings() -> MeshSettings  {
 open func delete(id: String)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
 open func deviceId() -> String?  {
 open func dial(multiaddr: String)throws   {try rustCallWithError(FfiConverterTypeIronCoreError_lift) {
+open func dialAsync(multiaddr: String)async throws   {
 open func dialableAddresses() -> [LedgerEntry]  {
 open func dispatchBlePacket(peerId: String, data: Data)  {try! rustCall() {
 open func dispatchProximityPacket(peerId: String, transport: ProximityTransport, data: Data)  {try! rustCall() {
@@ -136,6 +138,7 @@ open func overrideBleScanInterval(intervalMs: UInt32)  {try! rustCall() {
 open func overrideRelayMaxPerHour(max: UInt32)  {try! rustCall() {
 open func overrideRelayPriorityThreshold(threshold: UInt8?)  {try! rustCall() {
 open func pause()  {try! rustCall() {
+open func peekReceivedMessages() -> [ReceivedMessage]  {
 open func peelOnionLayer(onionData: Data, relaySecretKey: Data)throws  -> PeelResult  {
 open func peelOnionLayer(onionData: Data, relaySecretKey: Data)throws  -> PeelResult  {
 open func peerRateLimitMultiplier(peerId: String) -> Double  {

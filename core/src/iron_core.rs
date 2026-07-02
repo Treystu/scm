@@ -1096,6 +1096,14 @@ impl IronCore {
         self.inbox.write().drain_received_messages()
     }
 
+    /// Non-destructively list all received messages still in the inbox.
+    /// Unlike `drain_received_messages`, repeated calls return the same
+    /// messages until something else clears them - needed for read-only
+    /// polling like listing pending message requests.
+    pub fn peek_received_messages(&self) -> Vec<ReceivedMessage> {
+        self.inbox.read().all_messages()
+    }
+
     // -----------------------------------------------------------------------
     // Store managers (returned to WASM for bridging)
     // -----------------------------------------------------------------------
@@ -2497,6 +2505,7 @@ impl IronCore {
                     sender_id: message.sender_id.clone(),
                     payload: message.payload.clone(),
                     received_at: now,
+                    sender_public_key_hex: Some(hex::encode(&envelope.sender_public_key)),
                 });
             }
         }
